@@ -3,6 +3,7 @@
 启动方式: streamlit run app.py
 """
 
+import json
 import os
 import random
 import subprocess
@@ -338,6 +339,21 @@ html, body, [class*="css"] {
 [data-testid="stDecoration"],
 #MainMenu,
 footer {
+    display: none !important;
+}
+
+/* 侧边栏永不收起 */
+section[data-testid="stSidebar"] {
+    display: flex !important;
+    visibility: visible !important;
+    width: 21rem !important;
+    min-width: 21rem !important;
+    transform: none !important;
+    transition: none !important;
+}
+/* 隐藏侧边栏关闭按钮 */
+button[data-testid="stSidebarCloseButton"],
+[data-testid="stSidebarCollapseButton"] {
     display: none !important;
 }
 
@@ -1075,44 +1091,62 @@ def save_uploaded_file(uploaded_file, subdir: str) -> str:
 
 @st.cache_data(ttl=10, show_spinner=False)
 def scan_datasets(search_dir: str | None = None):
-    """扫描目录下所有 data.yaml / dataset.yaml"""
-    base = Path(search_dir) if search_dir else SCRIPT_DIR
+    """扫描目录下所有 data.yaml / dataset.yaml（含上传目录）"""
+    bases = [Path(search_dir)] if search_dir else [
+        SCRIPT_DIR, UPLOAD_DIR / "datasets", UPLOAD_DIR / "datasets_extracted"
+    ]
     datasets = []
-    for yf in sorted(base.rglob("data*.yaml")):
-        try:
-            with open(yf) as f:
-                d = yaml.safe_load(f)
-            if "train" not in d and "val" not in d:
+    seen = set()
+    for base in bases:
+        if not base.exists():
+            continue
+        for yf in sorted(base.rglob("data*.yaml")):
+            rp = str(yf.resolve())
+            if rp in seen:
                 continue
-            nc = d.get("nc", "?")
-            names = d.get("names", {})
-            label = f"{yf.parent.name}/{yf.name}" if yf.parent != base else yf.name
-            datasets.append({
-                "label": f"{label} (nc={nc})",
-                "path": str(yf.resolve()),
-                "nc": nc,
-                "names": names,
-            })
-        except Exception:
-            pass
+            seen.add(rp)
+            try:
+                with open(yf) as f:
+                    d = yaml.safe_load(f)
+                if "train" not in d and "val" not in d:
+                    continue
+                nc = d.get("nc", "?")
+                names = d.get("names", {})
+                label = f"{yf.parent.name}/{yf.name}" if yf.parent != base else yf.name
+                datasets.append({
+                    "label": f"{label} (nc={nc})",
+                    "path": rp,
+                    "nc": nc,
+                    "names": names,
+                })
+            except Exception:
+                pass
     return datasets
 
 
 @st.cache_data(ttl=10, show_spinner=False)
 def scan_models(search_dir: str | None = None):
-    """扫描 runs/detect/ 下所有 best.pt / last.pt"""
-    base = Path(search_dir) if search_dir else SCRIPT_DIR / "runs" / "detect"
+    """扫描 runs/detect/ 和上传目录下所有 best.pt / last.pt"""
+    bases = [Path(search_dir)] if search_dir else [
+        SCRIPT_DIR / "runs" / "detect", UPLOAD_DIR / "models"
+    ]
     models = []
-    if not base.exists():
-        return models
-    for ptf in sorted(base.rglob("*.pt"), key=os.path.getmtime, reverse=True):
-        mtime = datetime.fromtimestamp(os.path.getmtime(ptf)).strftime("%m-%d %H:%M")
-        label = f"{ptf.parent.name}/{ptf.name}"
-        models.append({
-            "label": f"{label} ({mtime})",
-            "path": str(ptf.resolve()),
-            "date": mtime,
-        })
+    seen = set()
+    for base in bases:
+        if not base.exists():
+            continue
+        for ptf in sorted(base.rglob("*.pt"), key=os.path.getmtime, reverse=True):
+            rp = str(ptf.resolve())
+            if rp in seen:
+                continue
+            seen.add(rp)
+            mtime = datetime.fromtimestamp(os.path.getmtime(ptf)).strftime("%m-%d %H:%M")
+            label = f"{ptf.parent.name}/{ptf.name}" if ptf.parent != base else ptf.name
+            models.append({
+                "label": f"{label} ({mtime})",
+                "path": rp,
+                "date": mtime,
+            })
     return models
 
 
@@ -1261,24 +1295,101 @@ def get_compute_devices() -> dict:
 # 通用组件：数据集选择器
 # ═══════════════════════════════════════════
 
+def _extract_dataset_zip(uploaded_zip) -> str | None:
+    """解压数据集 zip，找到 data.yaml 并修复相对路径，返回 yaml 路径"""
+    import zipfile
+    import shutil
+    extract_dir = UPLOAD_DIR / "datasets_extracted"
+    if extract_dir.exists():
+        shutil.rmtree(extract_dir)
+    extract_dir.mkdir(parents=True)
+    # 防 zip slip 路径穿越
+    safe_root = extract_dir.resolve()
+    with zipfile.ZipFile(uploaded_zip) as zf:
+        for member in zf.namelist():
+            member_path = (extract_dir / member).resolve()
+            if not str(member_path).startswith(str(safe_root) + os.sep):
+                st.error(f"压缩包包含非法路径: {member}")
+                shutil.rmtree(extract_dir)
+                return None
+        zf.extractall(extract_dir)
+    yaml_candidates = sorted(extract_dir.rglob("data*.yaml"))
+    if not yaml_candidates:
+        st.error("压缩包中未找到 data.yaml，请确保 zip 内包含完整的数据集目录结构。")
+        return None
+    yaml_path = yaml_candidates[0]
+    yaml_dir = yaml_path.parent
+    with open(yaml_path) as f:
+        ydata = yaml.safe_load(f) or {}
+    fixed = False
+    for key in ["train", "val", "test"]:
+        p = ydata.get(key, "")
+        if p and not Path(p).is_absolute():
+            resolved = (yaml_dir / p).resolve()
+            if not resolved.exists():
+                alt = yaml_dir / Path(p).name
+                if alt.exists():
+                    ydata[key] = str(alt.relative_to(yaml_dir))
+                    fixed = True
+            else:
+                ydata[key] = str(resolved)
+                fixed = True
+    if fixed:
+        with open(yaml_path, "w") as f:
+            yaml.dump(ydata, f)
+    st.success(f"数据集已解压至 {extract_dir}")
+    ui_path_chip(str(yaml_path), "已导入数据集")
+    return str(yaml_path.resolve())
+
+
 def dataset_selector(key_prefix: str, label: str = "数据集"):
-    """数据集下拉选择器，拖拽上传 + 自动扫描 + 手动输入"""
+    """数据集下拉选择器，拖拽上传（zip 或 yaml） + 自动扫描 + 手动输入"""
     datasets = scan_datasets()
 
     options = ["-- 手动输入路径 --"] + [d["label"] for d in datasets]
     if "dataset_custom" not in st.session_state:
         st.session_state.setdefault(f"{key_prefix}_mode", options[0])
 
-    uploaded = st.file_uploader(
-        f"拖拽上传 {label} YAML",
-        type=["yaml", "yml"],
-        key=f"{key_prefix}_ds_upload",
-        help="支持拖入 data.yaml / dataset.yaml。若 YAML 内部使用相对路径，请确保图片目录也在保存后的相对位置，或改用绝对路径。",
-    )
-    if uploaded is not None:
-        uploaded_path = save_uploaded_file(uploaded, "datasets")
-        ui_path_chip(uploaded_path, "已上传数据集配置")
-        return uploaded_path
+    tab1, tab2 = st.tabs(["拖拽上传 zip (推荐)", "拖拽上传 yaml"])
+
+    with tab1:
+        zip_upload = st.file_uploader(
+            f"拖拽数据集 zip 压缩包",
+            type=["zip"],
+            key=f"{key_prefix}_zip_upload",
+            help="将完整数据集文件夹（含 data.yaml + train/valid/test 子目录）打包为 zip，拖入即可自动解压导入。",
+        )
+        if zip_upload is not None:
+            result = _extract_dataset_zip(zip_upload)
+            if result:
+                st.session_state[f"{key_prefix}_last_ds"] = result
+                return result
+
+    with tab2:
+        uploaded = st.file_uploader(
+            f"拖拽上传 {label} YAML",
+            type=["yaml", "yml"],
+            key=f"{key_prefix}_ds_upload",
+            help="仅上传 data.yaml。若内部使用相对路径，图片目录需手动放置在 WSL 中。",
+        )
+        if uploaded is not None:
+            uploaded_path = save_uploaded_file(uploaded, "datasets")
+            ui_path_chip(uploaded_path, "已上传数据集配置")
+            parsed = parse_data_yaml(uploaded_path)
+            if parsed:
+                missing = []
+                for split_name in ["train", "val", "test"]:
+                    sp = parsed.get(split_name, "")
+                    if sp and not Path(sp).exists():
+                        missing.append(split_name)
+                if missing:
+                    st.warning(
+                        f"数据集目录缺失: {', '.join(missing)}。"
+                        "建议将完整数据集打包为 zip 通过左侧 Tab 上传，"
+                        "或将图片目录手动放入 WSL 后使用下方「手动输入路径」。",
+                    )
+            st.session_state[f"{key_prefix}_last_ds"] = uploaded_path
+            return uploaded_path
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1295,11 +1406,17 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
         )
 
     if manual:
+        st.session_state[f"{key_prefix}_last_ds"] = manual
         return manual
     if selected and selected != "-- 手动输入路径 --":
         for d in datasets:
             if d["label"] == selected:
+                st.session_state[f"{key_prefix}_last_ds"] = d["path"]
                 return d["path"]
+    # 持久化：复用在本次会话中上传或选择过的路径
+    persisted = st.session_state.get(f"{key_prefix}_last_ds", "")
+    if persisted and Path(persisted).exists():
+        return persisted
     return ""
 
 
@@ -1318,6 +1435,7 @@ def model_selector(key_prefix: str, label: str = "模型权重", allow_upload: b
         if uploaded is not None:
             uploaded_path = save_uploaded_file(uploaded, "models")
             ui_path_chip(uploaded_path, "已上传模型权重")
+            st.session_state[f"{key_prefix}_last_mdl"] = uploaded_path
             return uploaded_path
 
     col1, col2 = st.columns([2, 1])
@@ -1327,11 +1445,17 @@ def model_selector(key_prefix: str, label: str = "模型权重", allow_upload: b
         manual = st.text_input("或手动输入路径", placeholder="best.pt 路径", key=f"{key_prefix}_mdl_manual")
 
     if manual:
+        st.session_state[f"{key_prefix}_last_mdl"] = manual
         return manual
     if selected and selected != "-- 手动输入路径 --":
         for m in models:
             if m["label"] == selected:
+                st.session_state[f"{key_prefix}_last_mdl"] = m["path"]
                 return m["path"]
+    # 持久化：复用在本次会话中上传或选择过的路径
+    persisted = st.session_state.get(f"{key_prefix}_last_mdl", "")
+    if persisted and Path(persisted).exists():
+        return persisted
     return ""
 
 
@@ -1567,29 +1691,41 @@ def page_training():
             st.session_state["training_status"] = "配置错误"
             return
 
+        import json as _json
+        import tempfile as _tempfile
+        train_args = {
+            "model_yaml": str(model_yaml),
+            "data_yaml": str(yaml_path),
+            "epochs": epochs,
+            "imgsz": imgsz,
+            "batch": batch,
+            "device": str(device),
+            "project": str(SCRIPT_DIR / "runs" / "detect"),
+            "name": project_name,
+            "lr0": lr0,
+            "close_mosaic": close_mosaic,
+            "patience": patience,
+            "script_dir": str(SCRIPT_DIR),
+        }
+        # 写参数到 JSON 文件，避免命令注入
+        args_file = _tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, dir=str(SCRIPT_DIR))
+        args_file.write(_json.dumps(train_args))
+        args_file.close()
+
         cmd = [
             sys.executable, "-c",
-            f"""
-from ultralytics import YOLO
-import sys
-sys.path.insert(0, "{SCRIPT_DIR}")
-import custom_models.custom_yolov11_mobilenetv3  # noqa
-
-model = YOLO("{model_yaml}")
-model.train(
-    data="{yaml_path}",
-    epochs={epochs},
-    imgsz={imgsz},
-    batch={batch},
-    device="{device}",
-    project="runs/detect",
-    name="{project_name}",
-    optimizer="auto",
-    lr0={lr0},
-    close_mosaic={close_mosaic},
-    patience={patience},
-)
-            """,
+            "import json, sys, pathlib; "
+            "args = json.load(open(sys.argv[1])); "
+            "sys.path.insert(0, args['script_dir']); "
+            "import custom_models.custom_yolov11_mobilenetv3; "
+            "from ultralytics import YOLO; "
+            "m = YOLO(args['model_yaml']); "
+            "m.train(data=args['data_yaml'], epochs=args['epochs'], imgsz=args['imgsz'], "
+            "batch=args['batch'], device=args['device'], project=args['project'], "
+            "name=args['name'], optimizer='auto', lr0=args['lr0'], "
+            "close_mosaic=args['close_mosaic'], patience=args['patience']); "
+            "pathlib.Path(sys.argv[1]).unlink(missing_ok=True)",
+            args_file.name,
         ]
 
         st.session_state["training_status"] = f"训练中 ({selected_device})"
@@ -1609,10 +1745,12 @@ model.train(
 
         if process.returncode == 0:
             st.session_state["training_status"] = "训练完成"
-            st.success(f"训练完成！结果保存在 runs/detect/{project_name}/")
+            result_dir = SCRIPT_DIR / "runs" / "detect" / project_name
+            st.session_state["last_train_dir"] = str(result_dir)
+            st.session_state["_training_just_finished"] = True
+            st.success(f"训练完成！结果保存在 {result_dir}")
             # 清除模型缓存以便下次扫描到新模型
             scan_models.clear()
-            result_dir = Path(f"runs/detect/{project_name}")
             results_img = result_dir / "results.png"
             if results_img.exists():
                 ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
@@ -1621,13 +1759,16 @@ model.train(
             st.session_state["training_status"] = "训练失败"
             st.error("训练异常退出")
 
-    # 显示最近训练结果
-    result_dir = Path(f"runs/detect/{project_name}")
-    if not st.session_state.get("_training_just_finished") and result_dir.exists():
-        results_img = result_dir / "results.png"
-        if results_img.exists():
-            with st.expander("最近训练结果", expanded=False):
-                st.image(str(results_img), caption="训练曲线", use_container_width=True)
+    # 显示最近训练结果（非本次训练）
+    last_dir = st.session_state.get("last_train_dir")
+    just_finished = st.session_state.pop("_training_just_finished", False)
+    if last_dir and not just_finished:
+        result_dir = Path(last_dir)
+        if result_dir.exists():
+            results_img = result_dir / "results.png"
+            if results_img.exists():
+                with st.expander("最近训练结果", expanded=False):
+                    st.image(str(results_img), caption="训练曲线", use_container_width=True)
 
 
 # ═══════════════════════════════════════════
@@ -1678,17 +1819,15 @@ def page_inference():
             import cv2
             import numpy as np
 
-            ui_section("检测结果", "上传图片的检测框和目标数量。", "RESULT")
-            cols = st.columns(min(len(uploaded_files), 3))
-            for i, uploaded in enumerate(uploaded_files):
-                col = cols[i % 3]
+            results_list = []
+            for uploaded in uploaded_files:
                 file_bytes = np.frombuffer(uploaded.read(), np.uint8)
                 img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-                results = model.predict(img, conf=conf_threshold, verbose=False)
-                result_img = results[0].plot()
+                inf_result = model.predict(img, conf=conf_threshold, verbose=False)
+                result_img = inf_result[0].plot()
                 result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
 
-                boxes = results[0].boxes
+                boxes = inf_result[0].boxes
                 if boxes is not None and len(boxes) > 0:
                     cls_ids = boxes.cls.cpu().numpy().astype(int)
                     fire_count = int((cls_ids == 0).sum())
@@ -1697,8 +1836,17 @@ def page_inference():
                     caption = f"火焰 {fire_count} 处 | 烟雾 {smoke_count} 处 | 均置信度 {confs.mean():.2f}"
                 else:
                     caption = "未检测到目标"
-                col.image(result_img, caption=caption, use_container_width=True)
+                results_list.append({"img": result_img, "caption": caption})
                 uploaded.seek(0)
+            st.session_state["inf_results"] = results_list
+            st.session_state["inf_has_results"] = True
+
+        if st.session_state.get("inf_has_results"):
+            ui_section("检测结果", "上传图片的检测框和目标数量。", "RESULT")
+            results_list = st.session_state["inf_results"]
+            cols = st.columns(min(len(results_list), 3))
+            for i, r in enumerate(results_list):
+                cols[i % 3].image(r["img"], caption=r["caption"], use_container_width=True)
 
     else:
         # 测试集目录模式
@@ -1770,7 +1918,13 @@ def page_inference():
                 if len(results_display) < max_display:
                     result_img = results[0].plot()
                     result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
-                    results_display.append((Path(img_path).name, result_img, boxes))
+                    results_display.append({
+                        "name": Path(img_path).name,
+                        "img": result_img,
+                        "fire": int((cls_ids == 0).sum()) if boxes is not None and len(boxes) > 0 else 0,
+                        "smoke": int((cls_ids == 1).sum()) if boxes is not None and len(boxes) > 0 else 0,
+                        "has_boxes": boxes is not None and len(boxes) > 0,
+                    })
 
                 progress_bar.progress((idx + 1) / len(test_images))
                 status_text.text(f"处理中: {idx + 1}/{len(test_images)} — {Path(img_path).name}")
@@ -1778,28 +1932,35 @@ def page_inference():
             progress_bar.empty()
             status_text.empty()
 
+            st.session_state["inf_batch"] = {
+                "total_images": len(test_images),
+                "total_fire": total_fire,
+                "total_smoke": total_smoke,
+                "avg_conf": np.mean(all_confs) if all_confs else 0,
+                "display": results_display,
+            }
+            st.session_state["inf_batch_has"] = True
+
+        if st.session_state.get("inf_batch_has"):
+            import numpy as np
+            batch = st.session_state["inf_batch"]
             # 汇总
             ui_section("推理汇总", "批量目录的目标计数和平均置信度。", "SUMMARY")
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("测试图片数", len(test_images))
-            c2.metric("检测火焰总数", total_fire)
-            c3.metric("检测烟雾总数", total_smoke)
-            c4.metric("平均置信度", f"{np.mean(all_confs):.3f}" if all_confs else "—")
+            c1.metric("测试图片数", batch["total_images"])
+            c2.metric("检测火焰总数", batch["total_fire"])
+            c3.metric("检测烟雾总数", batch["total_smoke"])
+            c4.metric("平均置信度", f"{batch['avg_conf']:.3f}" if batch["avg_conf"] else "—")
 
             # 展示部分结果
+            results_display = batch["display"]
             if results_display:
                 ui_section("部分检测结果", f"展示前 {len(results_display)} 张结果图。", "GALLERY")
                 cols = st.columns(4)
-                for i, (name, rimg, boxes) in enumerate(results_display):
+                for i, r in enumerate(results_display):
                     col = cols[i % 4]
-                    b = boxes
-                    if b is not None and len(b) > 0:
-                        cls_ids = b.cls.cpu().numpy().astype(int)
-                        fc, sc = int((cls_ids == 0).sum()), int((cls_ids == 1).sum())
-                        cap = f"{name} | 火焰 {fc} | 烟雾 {sc}"
-                    else:
-                        cap = f"{name} | 无检测"
-                    col.image(rimg, caption=cap, use_container_width=True)
+                    cap = f"{r['name']} | 火焰 {r['fire']} | 烟雾 {r['smoke']}" if r["has_boxes"] else f"{r['name']} | 无检测"
+                    col.image(r["img"], caption=cap, use_container_width=True)
 
 
 # ═══════════════════════════════════════════
@@ -1866,47 +2027,127 @@ def page_evaluation():
         elif not yaml_path or not Path(yaml_path).exists():
             st.info("请选择评估数据集 data.yaml")
         elif st.button("开始评估", type="primary", key="eval_single"):
-            eval_result = None
-            model_info = None
             with st.spinner("正在评估模型..."):
                 try:
-                    eval_result = _run_eval(model_path, yaml_path)
-                    model_info = _get_model_info(model_path)
+                    st.session_state["eval_result"] = _run_eval(model_path, yaml_path)
+                    st.session_state["eval_model_info"] = _get_model_info(model_path)
+                    st.session_state["eval_model_path"] = model_path
+                    st.session_state["eval_yaml_path"] = yaml_path
+                    st.session_state["eval_has_result"] = True
                 except Exception as e:
                     st.error(f"评估失败: {e}")
+                    st.session_state["eval_has_result"] = False
 
-            if eval_result and model_info:
-                # 第一行：检测指标
-                ui_section("检测指标", "验证集上的目标检测核心指标。", "METRICS")
-                c1, c2, c3, c4, c5 = st.columns(5)
-                c1.metric("mAP@50", f"{eval_result['map50']:.4f}")
-                c2.metric("mAP@50-95", f"{eval_result['map50_95']:.4f}")
-                c3.metric("Precision", f"{eval_result['precision']:.4f}" if eval_result['precision'] else "—")
-                c4.metric("Recall", f"{eval_result['recall']:.4f}" if eval_result['recall'] else "—")
-                c5.metric("F1", f"{2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6):.4f}")
+        # 持久化展示结果（不因下载按钮点击而消失）
+        if st.session_state.get("eval_has_result"):
+            eval_result = st.session_state["eval_result"]
+            model_info = st.session_state["eval_model_info"]
+            model_path = st.session_state["eval_model_path"]
+            yaml_path = st.session_state["eval_yaml_path"]
 
-                # 第二行：模型复杂度
-                ui_section("模型复杂度", "参数量和估算计算量。", "COST")
-                c1, c2 = st.columns(2)
-                c1.metric("参数量", f"{model_info['params_m']:.1f} M")
-                c2.metric("计算量", f"{model_info['flops_g']:.1f} GFLOPs")
+            # 第一行：检测指标
+            ui_section("检测指标", "验证集上的目标检测核心指标。", "METRICS")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.metric("mAP@50", f"{eval_result['map50']:.4f}")
+            c2.metric("mAP@50-95", f"{eval_result['map50_95']:.4f}")
+            c3.metric("Precision", f"{eval_result['precision']:.4f}" if eval_result['precision'] else "—")
+            c4.metric("Recall", f"{eval_result['recall']:.4f}" if eval_result['recall'] else "—")
+            c5.metric("F1", f"{2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6):.4f}")
 
-                # 评估图表
-                val_dirs = sorted(Path("runs/detect").glob("*val*"), key=os.path.getmtime, reverse=True)
-                val_dir = val_dirs[0] if val_dirs else None
-                if val_dir:
-                    ui_section("评估图表", "Ultralytics 验证流程输出的可视化结果。", "PLOTS")
-                    plot_files = sorted(val_dir.glob("*.png"))
-                    if plot_files:
-                        cols = st.columns(2)
-                        for i, pf in enumerate(plot_files):
-                            cols[i % 2].image(str(pf), caption=pf.name, use_container_width=True)
-                    else:
-                        st.info("未找到评估图表文件")
+            # 第二行：模型复杂度
+            ui_section("模型复杂度", "参数量和估算计算量。", "COST")
+            c1, c2 = st.columns(2)
+            c1.metric("参数量", f"{model_info['params_m']:.1f} M")
+            c2.metric("计算量", f"{model_info['flops_g']:.1f} GFLOPs")
+
+            # 评估图表
+            val_dirs = sorted((SCRIPT_DIR / "runs" / "detect").glob("*val*"), key=os.path.getmtime, reverse=True)
+            val_dir = val_dirs[0] if val_dirs else None
+            if val_dir:
+                ui_section("评估图表", "Ultralytics 验证流程输出的可视化结果。", "PLOTS")
+                plot_files = sorted(val_dir.glob("*.png"))
+                if plot_files:
+                    cols = st.columns(2)
+                    for i, pf in enumerate(plot_files):
+                        cols[i % 2].image(str(pf), caption=pf.name, use_container_width=True)
                 else:
-                    st.info("评估图表将在运行后自动生成")
+                    st.info("未找到评估图表文件")
             else:
                 st.info("评估图表将在运行后自动生成")
+
+            # 导出评估结果
+            ui_section("导出结果", "生成含全部评估指标和曲线的汇总图片。", "EXPORT")
+            from io import BytesIO
+            import matplotlib.pyplot as plt
+
+            f1_val = 2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.axis("off")
+
+            title = f"Evaluation Report — {Path(model_path).name}"
+            ax.text(0.5, 0.92, title, transform=ax.transAxes, fontsize=18, fontweight="bold",
+                    ha="center", va="top", fontfamily="monospace")
+
+            info_lines = [
+                f"Model: {Path(model_path).name}",
+                f"Dataset: {Path(yaml_path).name}",
+                f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            ]
+            for i, line in enumerate(info_lines):
+                ax.text(0.05, 0.80 - i * 0.05, line, transform=ax.transAxes,
+                        fontsize=9, fontfamily="monospace", color="#555555")
+
+            bar_labels, bar_vals, bar_colors = [], [], []
+            for name, val in [
+                ("mAP@50", eval_result["map50"]),
+                ("mAP@50-95", eval_result["map50_95"]),
+                ("Precision", eval_result["precision"]),
+                ("Recall", eval_result["recall"]),
+                ("F1 Score", f1_val),
+            ]:
+                bar_labels.append(name)
+                bar_vals.append(val)
+                bar_colors.append("#4CAF50" if val >= 0.7 else "#FF9800" if val >= 0.4 else "#F44336")
+
+            ax_bar = fig.add_axes([0.08, 0.38, 0.5, 0.32])
+            bars = ax_bar.barh(bar_labels, bar_vals, color=bar_colors, height=0.5)
+            ax_bar.set_xlim(0, 1)
+            ax_bar.set_xlabel("Score", fontsize=9)
+            for bar, val in zip(bars, bar_vals):
+                ax_bar.text(bar.get_width() + 0.01, bar.get_y() + bar.get_height() / 2,
+                            f"{val:.4f}", va="center", fontsize=10, fontweight="bold", fontfamily="monospace")
+            ax_bar.invert_yaxis()
+
+            ax_table = fig.add_axes([0.62, 0.38, 0.34, 0.32])
+            ax_table.axis("off")
+            table_data = [["Params", f"{model_info['params_m']:.1f} M"],
+                          ["GFLOPs", f"{model_info['flops_g']:.1f}"]]
+            tbl = ax_table.table(cellText=table_data, colLabels=["Metric", "Value"],
+                                 cellLoc="center", loc="center", colWidths=[0.18, 0.14])
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(10)
+            for key, cell in tbl.get_celld().items():
+                if key[0] == 0:
+                    cell.set_facecolor("#333333")
+                    cell.set_text_props(color="white", fontweight="bold")
+
+            footer = "Flame & Smoke Detection · YOLOv11 + MobileNetV3 + Slim-Neck"
+            ax.text(0.5, 0.02, footer, transform=ax.transAxes, fontsize=8,
+                    ha="center", va="bottom", fontfamily="monospace", color="#aaaaaa")
+
+            buf = BytesIO()
+            fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+            buf.seek(0)
+            plt.close(fig)
+
+            fname = f"eval_{Path(model_path).stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            st.download_button(label="下载评估报告 (PNG)", data=buf, file_name=fname, mime="image/png")
+
+            eval_dir = (SCRIPT_DIR / "eval_results")
+            eval_dir.mkdir(exist_ok=True)
+            save_path = eval_dir / fname
+            save_path.write_bytes(buf.getvalue())
+            st.caption(f"已自动保存至 {save_path.resolve()}")
 
     # ══════════════ Tab 2: 多模型对比 ══════════════
     with tab2:
@@ -1957,62 +2198,142 @@ def page_evaluation():
                     progress.progress((i + 1) / len(selected_paths))
                 progress.empty()
 
-                if len(comparison_data) < 2:
-                    st.error("至少需要 2 个模型评估成功才能对比")
+                if len(comparison_data) >= 2:
+                    st.session_state["cmp_data"] = comparison_data
+                    st.session_state["cmp_names"] = selected_names[:len(comparison_data)]
+                    st.session_state["cmp_yaml"] = yaml_path
+                    st.session_state["cmp_has_result"] = True
                 else:
-                    import pandas as pd
-                    df = pd.DataFrame(comparison_data)
+                    st.error("至少需要 2 个模型评估成功才能对比")
+                    st.session_state["cmp_has_result"] = False
 
-                    # 对比表格
-                    ui_section("指标对比表", "同一评估集上的横向指标。", "TABLE")
-                    st.dataframe(
-                        df.style.format({
-                            "mAP@50": "{:.4f}", "mAP@50-95": "{:.4f}",
-                            "Precision": "{:.4f}", "Recall": "{:.4f}", "F1": "{:.4f}",
-                            "参数量 (M)": "{:.1f}", "GFLOPs": "{:.1f}",
-                        }),
-                        use_container_width=True, hide_index=True,
-                    )
+            # 持久化展示对比结果
+            if st.session_state.get("cmp_has_result"):
+                comparison_data = st.session_state["cmp_data"]
+                selected_names = st.session_state["cmp_names"]
+                import pandas as pd
+                df = pd.DataFrame(comparison_data)
 
-                    # 分组柱形图：mAP
-                    ui_section("检测精度对比", "mAP@50 与 mAP@50-95 对比。", "CHART")
-                    chart_data_map = pd.DataFrame({
-                        "模型": selected_names[:len(comparison_data)],
-                        "mAP@50": [d["mAP@50"] for d in comparison_data],
-                        "mAP@50-95": [d["mAP@50-95"] for d in comparison_data],
-                    }).set_index("模型")
-                    st.bar_chart(chart_data_map, use_container_width=True)
+                # 对比表格
+                ui_section("指标对比表", "同一评估集上的横向指标。", "TABLE")
+                st.dataframe(
+                    df.style.format({
+                        "mAP@50": "{:.4f}", "mAP@50-95": "{:.4f}",
+                        "Precision": "{:.4f}", "Recall": "{:.4f}", "F1": "{:.4f}",
+                        "参数量 (M)": "{:.1f}", "GFLOPs": "{:.1f}",
+                    }),
+                    use_container_width=True, hide_index=True,
+                )
 
-                    # 分组柱形图：P/R/F1
-                    ui_section("Precision / Recall / F1", "精确率、召回率和综合 F1 对比。", "CHART")
-                    chart_data_pr = pd.DataFrame({
-                        "模型": selected_names[:len(comparison_data)],
-                        "Precision": [d["Precision"] for d in comparison_data],
-                        "Recall": [d["Recall"] for d in comparison_data],
-                        "F1": [d["F1"] for d in comparison_data],
-                    }).set_index("模型")
-                    st.bar_chart(chart_data_pr, use_container_width=True)
+                # 分组柱形图：mAP
+                ui_section("检测精度对比", "mAP@50 与 mAP@50-95 对比。", "CHART")
+                chart_data_map = pd.DataFrame({
+                    "模型": selected_names[:len(comparison_data)],
+                    "mAP@50": [d["mAP@50"] for d in comparison_data],
+                    "mAP@50-95": [d["mAP@50-95"] for d in comparison_data],
+                }).set_index("模型")
+                st.bar_chart(chart_data_map, use_container_width=True)
 
-                    # 水平条形图：参数量 / FLOPs
-                    ui_section("模型复杂度对比", "参数量和计算量越低越适合边缘部署。", "COST")
-                    import matplotlib.pyplot as plt
-                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
-                    names = selected_names[:len(comparison_data)]
-                    params_vals = [d["参数量 (M)"] for d in comparison_data]
-                    flops_vals = [d["GFLOPs"] for d in comparison_data]
+                # 分组柱形图：P/R/F1
+                ui_section("Precision / Recall / F1", "精确率、召回率和综合 F1 对比。", "CHART")
+                chart_data_pr = pd.DataFrame({
+                    "模型": selected_names[:len(comparison_data)],
+                    "Precision": [d["Precision"] for d in comparison_data],
+                    "Recall": [d["Recall"] for d in comparison_data],
+                    "F1": [d["F1"] for d in comparison_data],
+                }).set_index("模型")
+                st.bar_chart(chart_data_pr, use_container_width=True)
 
-                    colors_params = ["#4CAF50" if v == min(params_vals) else "#2196F3" for v in params_vals]
-                    ax1.barh(names, params_vals, color=colors_params)
-                    ax1.set_xlabel("参数量 (M)")
-                    ax1.set_title("参数量对比 (越小越好)")
+                # 水平条形图：参数量 / FLOPs
+                ui_section("模型复杂度对比", "参数量和计算量越低越适合边缘部署。", "COST")
+                import matplotlib.pyplot as plt
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
+                names = selected_names[:len(comparison_data)]
+                params_vals = [d["参数量 (M)"] for d in comparison_data]
+                flops_vals = [d["GFLOPs"] for d in comparison_data]
 
-                    colors_flops = ["#4CAF50" if v == min(flops_vals) else "#2196F3" for v in flops_vals]
-                    ax2.barh(names, flops_vals, color=colors_flops)
-                    ax2.set_xlabel("GFLOPs")
-                    ax2.set_title("计算量对比 (越小越好)")
+                colors_params = ["#4CAF50" if v == min(params_vals) else "#2196F3" for v in params_vals]
+                ax1.barh(names, params_vals, color=colors_params)
+                ax1.set_xlabel("参数量 (M)")
+                ax1.set_title("参数量对比 (越小越好)")
 
-                    fig.tight_layout()
-                    st.pyplot(fig)
+                colors_flops = ["#4CAF50" if v == min(flops_vals) else "#2196F3" for v in flops_vals]
+                ax2.barh(names, flops_vals, color=colors_flops)
+                ax2.set_xlabel("GFLOPs")
+                ax2.set_title("计算量对比 (越小越好)")
+
+                fig.tight_layout()
+                st.pyplot(fig)
+
+                # 导出对比结果
+                ui_section("导出对比", "生成包含全部模型对比指标的汇总图片。", "EXPORT")
+                from io import BytesIO
+                import matplotlib.pyplot as plt
+
+                n = len(comparison_data)
+                fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+                fig.suptitle("Model Comparison Report", fontsize=16, fontweight="bold", fontfamily="monospace")
+                names_list = [d["模型"] for d in comparison_data]
+                colors = ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336"]
+
+                # mAP
+                ax = axes[0][0]
+                x = range(n)
+                ax.bar([i - 0.15 for i in x], [d["mAP@50"] for d in comparison_data], 0.28,
+                       color=colors[0], label="mAP@50")
+                ax.bar([i + 0.15 for i in x], [d["mAP@50-95"] for d in comparison_data], 0.28,
+                       color=colors[1], label="mAP@50-95")
+                ax.set_xticks(x)
+                ax.set_xticklabels(names_list, fontsize=8)
+                ax.set_ylim(0, 1)
+                ax.set_title("Detection Accuracy", fontsize=11)
+                ax.legend(fontsize=8)
+
+                # Precision / Recall / F1
+                ax = axes[0][1]
+                x = range(n)
+                w = 0.25
+                ax.bar([i - w for i in x], [d["Precision"] for d in comparison_data], w, color=colors[2], label="Precision")
+                ax.bar(x, [d["Recall"] for d in comparison_data], w, color=colors[3], label="Recall")
+                ax.bar([i + w for i in x], [d["F1"] for d in comparison_data], w, color=colors[4], label="F1")
+                ax.set_xticks(x)
+                ax.set_xticklabels(names_list, fontsize=8)
+                ax.set_ylim(0, 1)
+                ax.set_title("Precision / Recall / F1", fontsize=11)
+                ax.legend(fontsize=8)
+
+                # 参数量
+                ax = axes[1][0]
+                params_vals = [d["参数量 (M)"] for d in comparison_data]
+                ax.bar(names_list, params_vals, color=[colors[i % len(colors)] for i in range(n)])
+                ax.set_title("Parameters (M)", fontsize=11)
+                ax.tick_params(axis="x", labelsize=8)
+                for i, v in enumerate(params_vals):
+                    ax.text(i, v + max(params_vals) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+
+                # GFLOPs
+                ax = axes[1][1]
+                flops_vals = [d["GFLOPs"] for d in comparison_data]
+                ax.bar(names_list, flops_vals, color=[colors[i % len(colors)] for i in range(n)])
+                ax.set_title("GFLOPs", fontsize=11)
+                ax.tick_params(axis="x", labelsize=8)
+                for i, v in enumerate(flops_vals):
+                    ax.text(i, v + max(flops_vals) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+
+                fig.tight_layout()
+
+                buf = BytesIO()
+                fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+                buf.seek(0)
+                plt.close(fig)
+
+                fname = f"compare_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                st.download_button(label="下载对比报告 (PNG)", data=buf, file_name=fname, mime="image/png")
+
+                eval_dir = (SCRIPT_DIR / "eval_results")
+                eval_dir.mkdir(exist_ok=True)
+                (eval_dir / fname).write_bytes(buf.getvalue())
+                st.caption(f"已自动保存至 {eval_dir.resolve() / fname}")
 
 
 # ═══════════════════════════════════════════
@@ -2158,14 +2479,27 @@ def page_hardware():
                     # 回退到 torch 直接统计
                     total = sum(p.numel() for p in model.model.parameters())
                     params_m = total / 1e6
-                    # 粗略估算 FLOPs
                     flops_g = params_m * imgsz * imgsz / 100000
 
                 memory = estimate_memory(params_m, imgsz, batch, fp16_mode)
 
+                st.session_state["hw_params_m"] = params_m
+                st.session_state["hw_flops_g"] = flops_g
+                st.session_state["hw_memory"] = memory
+                st.session_state["hw_imgsz"] = imgsz
+                st.session_state["hw_fp16"] = fp16_mode
+                st.session_state["hw_has_result"] = True
+
             except Exception as e:
                 st.error(f"模型分析失败: {e}")
-                return
+                st.session_state["hw_has_result"] = False
+
+    if st.session_state.get("hw_has_result"):
+        params_m = st.session_state["hw_params_m"]
+        flops_g = st.session_state["hw_flops_g"]
+        memory = st.session_state["hw_memory"]
+        imgsz = st.session_state["hw_imgsz"]
+        fp16_mode = st.session_state["hw_fp16"]
 
         # 展示预估结果
         ui_section("模型复杂度", "从 Ultralytics 模型信息解析出的参数量和 GFLOPs。", "MODEL")
@@ -2283,22 +2617,18 @@ def page_optimization():
 
     if st.button("执行优化", type="primary", use_container_width=True):
         results = []
-        export_dir = Path("runs/optimize")
+        export_dir = SCRIPT_DIR / "runs" / "optimize"
         export_dir.mkdir(parents=True, exist_ok=True)
         model_name = Path(target_model).stem
 
         model = load_model_cached(target_model)
-
-        # 按照 imgsz 缩减
-        if reduced_imgsz != 640:
-            st.warning(f"当前版本 imgsz 缩减需在导出时指定，实际推理时设置 imgsz={reduced_imgsz} 即可")
 
         if export_fp16:
             with st.spinner("导出 FP16 ONNX..."):
                 try:
                     out = model.export(format="onnx", half=True, imgsz=reduced_imgsz)
                     out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("FP16 ONNX", out, out_size, "通用硬件，半精度"))
+                    results.append(("FP16 ONNX", str(out), out_size, "通用硬件，半精度"))
                 except Exception as e:
                     st.error(f"FP16 导出失败: {e}")
 
@@ -2307,7 +2637,7 @@ def page_optimization():
                 try:
                     out = model.export(format="onnx", half=False, imgsz=reduced_imgsz)
                     out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("FP32 ONNX", out, out_size, "通用跨平台部署"))
+                    results.append(("FP32 ONNX", str(out), out_size, "通用跨平台部署"))
                 except Exception as e:
                     st.error(f"ONNX 导出失败: {e}")
 
@@ -2316,33 +2646,67 @@ def page_optimization():
                 try:
                     out = model.export(format="tflite", int8=True, imgsz=reduced_imgsz)
                     out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("INT8 TFLite", out, out_size, "边缘设备，极致压缩"))
+                    results.append(("INT8 TFLite", str(out), out_size, "边缘设备，极致压缩"))
                 except Exception as e:
                     st.error(f"INT8 导出失败: {e}。可能需要代表性数据集校准，尝试无量化导出...")
                     try:
                         out = model.export(format="tflite", imgsz=reduced_imgsz)
                         out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                        results.append(("FP32 TFLite", out, out_size, "边缘设备备用"))
+                        results.append(("FP32 TFLite", str(out), out_size, "边缘设备备用"))
                     except Exception as e2:
                         st.error(f"TFLite 导出也失败: {e2}")
 
-        if results:
-            st.success(f"优化完成！共生成 {len(results)} 个模型文件")
-            ui_section("优化结果", "导出文件路径、大小和压缩比例。", "OUTPUT")
-            for name, path, size, desc in results:
-                c1, c2, c3 = st.columns([2, 1, 2])
-                c1.code(f"{name}: {path}")
-                c2.metric("大小", f"{size} MB", f"{(1 - size/model_size_mb)*100:.0f}%" if model_size_mb else "")
-                c3.caption(desc)
-        else:
-            st.warning("未选择任何优化方案，请至少勾选一项")
+        st.session_state["opt_results"] = results
+        st.session_state["opt_model_size"] = model_size_mb
+        st.session_state["opt_has_result"] = bool(results)
+
+    if st.session_state.get("opt_has_result"):
+        results = st.session_state["opt_results"]
+        model_size_mb = st.session_state["opt_model_size"]
+        st.success(f"优化完成！共生成 {len(results)} 个模型文件")
+        ui_section("优化结果", "导出文件路径、大小和压缩比例。", "OUTPUT")
+        for name, path, size, desc in results:
+            c1, c2, c3 = st.columns([2, 1, 2])
+            c1.code(f"{name}: {path}")
+            c2.metric("大小", f"{size} MB", f"{(1 - size/model_size_mb)*100:.0f}%" if model_size_mb else "")
+            c3.caption(desc)
 
 
 # ═══════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════
 
+def _cleanup_old_files():
+    """清理过期文件，防止无限累积"""
+    # eval_results: 保留最近 10 个
+    for sub in ["eval_results"]:
+        d = SCRIPT_DIR / sub
+        if d.exists():
+            files = sorted(d.glob("*"), key=os.path.getmtime, reverse=True)
+            for f in files[10:]:
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+    # 上传目录: 清理 7 天前的文件
+    import time as _time
+    for subdir in ["models", "datasets", "model_configs"]:
+        d = UPLOAD_DIR / subdir
+        if d.exists():
+            cutoff = _time.time() - 7 * 86400
+            for f in d.iterdir():
+                if f.is_file() and os.path.getmtime(f) < cutoff:
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+
+
 def main():
+    if not st.session_state.get("_cleanup_done"):
+        _cleanup_old_files()
+        st.session_state["_cleanup_done"] = True
+
     datasets_count = len(scan_datasets())
     models_count = len(scan_models())
     configs_count = len(scan_model_configs())
