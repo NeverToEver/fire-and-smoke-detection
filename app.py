@@ -1324,16 +1324,35 @@ def _extract_dataset_zip(uploaded_zip) -> str | None:
     fixed = False
     for key in ["train", "val", "test"]:
         p = ydata.get(key, "")
-        if p and not Path(p).is_absolute():
-            resolved = (yaml_dir / p).resolve()
-            if not resolved.exists():
-                alt = yaml_dir / Path(p).name
-                if alt.exists():
-                    ydata[key] = str(alt.relative_to(yaml_dir))
-                    fixed = True
-            else:
-                ydata[key] = str(resolved)
-                fixed = True
+        if not p or Path(p).is_absolute():
+            continue
+        found = None
+        # 策略 1: 直接拼到 yaml_dir 下
+        candidate = (yaml_dir / p).resolve()
+        if candidate.exists():
+            found = candidate
+        # 策略 2: 去掉开头可能多余的 ../（Roboflow 常见问题）
+        if not found:
+            stripped = str(p)
+            while stripped.startswith("../"):
+                stripped = stripped[3:]
+            candidate = (yaml_dir / stripped).resolve()
+            if candidate.exists():
+                found = candidate
+        # 策略 3: 按路径末尾的 train/images 模式在 yaml_dir 下搜索
+        if not found:
+            parts = Path(p).parts
+            # 尝试匹配最后 2 级（如 train/images）
+            for n in [2, 1]:
+                if len(parts) >= n:
+                    sub = Path(*parts[-n:])
+                    candidate = (yaml_dir / sub).resolve()
+                    if candidate.exists():
+                        found = candidate
+                        break
+        if found:
+            ydata[key] = str(found.resolve())
+            fixed = True
     if fixed:
         with open(yaml_path, "w") as f:
             yaml.dump(ydata, f)
@@ -2486,8 +2505,8 @@ def page_hardware():
                 st.session_state["hw_params_m"] = params_m
                 st.session_state["hw_flops_g"] = flops_g
                 st.session_state["hw_memory"] = memory
-                st.session_state["hw_imgsz"] = imgsz
-                st.session_state["hw_fp16"] = fp16_mode
+                st.session_state["hw_saved_imgsz"] = imgsz
+                st.session_state["hw_saved_fp16"] = fp16_mode
                 st.session_state["hw_has_result"] = True
 
             except Exception as e:
@@ -2498,8 +2517,8 @@ def page_hardware():
         params_m = st.session_state["hw_params_m"]
         flops_g = st.session_state["hw_flops_g"]
         memory = st.session_state["hw_memory"]
-        imgsz = st.session_state["hw_imgsz"]
-        fp16_mode = st.session_state["hw_fp16"]
+        imgsz = st.session_state["hw_saved_imgsz"]
+        fp16_mode = st.session_state["hw_saved_fp16"]
 
         # 展示预估结果
         ui_section("模型复杂度", "从 Ultralytics 模型信息解析出的参数量和 GFLOPs。", "MODEL")
@@ -2690,14 +2709,18 @@ def _cleanup_old_files():
                     pass
     # 上传目录: 清理 7 天前的文件
     import time as _time
-    for subdir in ["models", "datasets", "model_configs"]:
+    import shutil as _shutil
+    for subdir in ["models", "datasets", "model_configs", "datasets_extracted"]:
         d = UPLOAD_DIR / subdir
         if d.exists():
             cutoff = _time.time() - 7 * 86400
             for f in d.iterdir():
-                if f.is_file() and os.path.getmtime(f) < cutoff:
+                if os.path.getmtime(f) < cutoff:
                     try:
-                        f.unlink()
+                        if f.is_dir():
+                            _shutil.rmtree(f)
+                        else:
+                            f.unlink()
                     except OSError:
                         pass
 
