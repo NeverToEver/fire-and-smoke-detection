@@ -221,3 +221,7 @@ __marimo__/
 # Runtime outputs
 eval_results/
 runs/
+
+# Downloaded / temp model files
+/*.pt
+tmp*.json

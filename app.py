@@ -23,784 +23,501 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ═══════════════════════════════════════════
-# 工业实验控制台风格自定义样式
-# ═══════════════════════════════════════════
+# ── CLA 设计语言 · 自定义样式 ──
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+/* ═══════════════════════════════════════════
+   DESIGN TOKENS — Claude-inspired warm editorial
+   ═══════════════════════════════════════════ */
 :root {
-    --bg: #090705;
-    --bg-grid: rgba(251, 146, 60, 0.08);
-    --surface: #15110D;
-    --surface-raised: #1D1711;
-    --surface-strong: #080604;
-    --ink: #FFF7ED;
-    --ink-2: #FED7AA;
-    --muted: #C9A586;
-    --faint: #8B735F;
-    --line: rgba(251, 146, 60, 0.20);
-    --line-strong: rgba(251, 146, 60, 0.42);
-    --brand: #EA580C;
-    --brand-soft: rgba(234, 88, 12, 0.16);
-    --signal: #2DD4BF;
-    --signal-soft: rgba(45, 212, 191, 0.14);
-    --success: #4ADE80;
-    --warning: #F59E0B;
-    --danger: #F87171;
-    --blueprint: #60A5FA;
-    --radius: 8px;
-    --shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
-    --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.26);
-    --app-bg: radial-gradient(circle at 18% 0%, rgba(234, 88, 12, 0.28), transparent 34rem),
-        radial-gradient(circle at 88% 18%, rgba(249, 115, 22, 0.16), transparent 28rem),
-        linear-gradient(180deg, #0D0906 0%, #090705 54%, #130C07 100%);
-    --header-border: rgba(251, 146, 60, 0.16);
-    --sidebar-bg: radial-gradient(circle at 50% 0%, rgba(234, 88, 12, 0.28), transparent 18rem),
-        linear-gradient(180deg, #130C07 0%, #0B0907 48%, #090705 100%);
-    --sidebar-border: rgba(251, 146, 60, 0.18);
-    --sidebar-text: #F3F4F6;
-    --sidebar-title: #FFFFFF;
-    --sidebar-muted: #AEB7C6;
-    --sidebar-eyebrow: #FDBA74;
-    --sidebar-meta: #CBD5E1;
-    --sidebar-brand-border: rgba(251, 146, 60, 0.22);
-    --sidebar-brand-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.24), rgba(146, 64, 14, 0.12)),
-        rgba(255, 247, 237, 0.035);
-    --sidebar-brand-shadow: inset 0 1px 0 rgba(255, 247, 237, 0.08);
-    --sidebar-card-border: rgba(251, 146, 60, 0.16);
-    --sidebar-card-bg: rgba(255, 247, 237, 0.04);
-    --sidebar-radio-bg: rgba(255, 247, 237, 0.035);
-    --sidebar-radio-hover-bg: rgba(234, 88, 12, 0.14);
-    --sidebar-radio-hover-border: rgba(251, 146, 60, 0.45);
-    --sidebar-radio-selected-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.26), rgba(15, 118, 110, 0.18));
-    --sidebar-radio-selected-border: rgba(251, 146, 60, 0.65);
-    --sidebar-path-bg: rgba(255, 255, 255, 0.055);
-    --sidebar-path-text: #CBD5E1;
-    --hero-border: rgba(251, 146, 60, 0.28);
-    --hero-bg: radial-gradient(circle at 14% 18%, rgba(249, 115, 22, 0.35), transparent 20rem),
-        linear-gradient(120deg, rgba(234, 88, 12, 0.22), transparent 38%),
-        linear-gradient(135deg, #17100B 0%, #0B0907 58%, #231306 100%);
-    --hero-desc: #CBD5E1;
-    --hero-grid-y: rgba(255, 255, 255, 0.06);
-    --hero-grid-x: rgba(255, 255, 255, 0.05);
-    --chip-border: rgba(255, 255, 255, 0.14);
-    --chip-bg: rgba(255, 255, 255, 0.08);
-    --chip-text: #E5E7EB;
-    --path-bg: rgba(21, 17, 13, 0.86);
-    --button-bg: #1D1711;
-    --button-hover-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
-    --dropzone-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(21, 17, 13, 0.92));
-    --table-header-bg: #21170F;
-    --image-bg: #111827;
-    --code-border: rgba(251, 146, 60, 0.24);
-    --tab-bg: rgba(21, 17, 13, 0.58);
-    --popover-bg: #15110D;
-    --option-bg: #15110D;
-    --option-hover-bg: rgba(234, 88, 12, 0.18);
-    --alert-bg: rgba(21, 17, 13, 0.92);
-    --input-bg: #17110D;
-    --input-text: #FFF7ED;
-    --input-placeholder: #E7C49F;
-    --upload-button-bg: #FFF7ED;
-    --upload-button-text: #9A3412;
-}
+    --font-display: "Playfair Display", "Noto Serif SC", Georgia, serif;
+    --font-body: "Inter", "Noto Sans SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
-@media (prefers-color-scheme: light) {
-    :root {
-        --bg: #FFF7ED;
-        --bg-grid: rgba(234, 88, 12, 0.10);
-        --surface: #FFFFFF;
-        --surface-raised: #FFFBF6;
-        --surface-strong: #FFF7ED;
-        --ink: #1C120A;
-        --ink-2: #4A2D1C;
-        --muted: #7C5F4B;
-        --faint: #A78B75;
-        --line: rgba(194, 101, 32, 0.24);
-        --line-strong: rgba(234, 88, 12, 0.45);
-        --brand-soft: rgba(234, 88, 12, 0.10);
-        --signal: #0F766E;
-        --signal-soft: rgba(15, 118, 110, 0.10);
-        --success: #15803D;
-        --warning: #B45309;
-        --danger: #B91C1C;
-        --blueprint: #1D4ED8;
-        --shadow: 0 18px 44px rgba(124, 45, 18, 0.13);
-        --shadow-soft: 0 8px 24px rgba(124, 45, 18, 0.09);
-        --app-bg: radial-gradient(circle at 16% 0%, rgba(251, 146, 60, 0.30), transparent 31rem),
-            radial-gradient(circle at 88% 20%, rgba(253, 186, 116, 0.24), transparent 26rem),
-            linear-gradient(180deg, #FFF7ED 0%, #FFF3E6 48%, #FFFCF8 100%);
-        --header-border: rgba(194, 101, 32, 0.22);
-        --sidebar-bg: radial-gradient(circle at 50% 0%, rgba(251, 146, 60, 0.30), transparent 16rem),
-            linear-gradient(180deg, #FFF4E8 0%, #FFE9D2 52%, #FFF9F2 100%);
-        --sidebar-border: rgba(194, 101, 32, 0.24);
-        --sidebar-text: #3A2414;
-        --sidebar-title: #1C120A;
-        --sidebar-muted: #7C5F4B;
-        --sidebar-eyebrow: #C2410C;
-        --sidebar-meta: #6B4A33;
-        --sidebar-brand-border: rgba(234, 88, 12, 0.28);
-        --sidebar-brand-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 237, 213, 0.68)),
-            rgba(255, 255, 255, 0.50);
-        --sidebar-brand-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-        --sidebar-card-border: rgba(234, 88, 12, 0.20);
-        --sidebar-card-bg: rgba(255, 255, 255, 0.58);
-        --sidebar-radio-bg: rgba(255, 255, 255, 0.54);
-        --sidebar-radio-hover-bg: rgba(234, 88, 12, 0.12);
-        --sidebar-radio-hover-border: rgba(234, 88, 12, 0.42);
-        --sidebar-radio-selected-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.16), rgba(15, 118, 110, 0.10));
-        --sidebar-radio-selected-border: rgba(234, 88, 12, 0.56);
-        --sidebar-path-bg: rgba(255, 255, 255, 0.68);
-        --sidebar-path-text: #6B4A33;
-        --path-bg: rgba(255, 255, 255, 0.78);
-        --button-bg: #FFFFFF;
-        --button-hover-shadow: 0 10px 24px rgba(124, 45, 18, 0.12);
-        --dropzone-bg: linear-gradient(135deg, rgba(255, 247, 237, 0.96), rgba(255, 255, 255, 0.92));
-        --table-header-bg: #FFF1E3;
-        --code-border: rgba(234, 88, 12, 0.20);
-        --tab-bg: rgba(255, 255, 255, 0.66);
-        --popover-bg: #FFFFFF;
-        --option-bg: #FFFFFF;
-        --option-hover-bg: rgba(234, 88, 12, 0.12);
-        --alert-bg: rgba(255, 255, 255, 0.92);
-        --input-bg: #FFFFFF;
-        --input-text: #1C120A;
-        --input-placeholder: #7C5F4B;
-        --upload-button-bg: #FFFFFF;
-        --upload-button-text: #C2410C;
-    }
-}
-
-:root.theme-light,
-:root:has(#fs-theme-light) {
-    --bg: #FFF7ED;
-    --bg-grid: rgba(234, 88, 12, 0.10);
+    /* Warm cream + ink palette */
+    --bg: #FAF8F5;
     --surface: #FFFFFF;
-    --surface-raised: #FFFBF6;
-    --surface-strong: #FFF7ED;
-    --ink: #1C120A;
-    --ink-2: #4A2D1C;
-    --muted: #7C5F4B;
-    --faint: #A78B75;
-    --line: rgba(194, 101, 32, 0.24);
-    --line-strong: rgba(234, 88, 12, 0.45);
-    --brand-soft: rgba(234, 88, 12, 0.10);
+    --surface-raised: #FCFAF7;
+    --ink: #1A1815;
+    --ink-2: #3D3833;
+    --muted: #78716C;
+    --faint: #A8A29E;
+    --line: #E7E2DB;
+    --line-strong: #D1CCC4;
+
+    /* Amber accent — Claude's signature */
+    --brand: #D97706;
+    --brand-hover: #B45309;
+    --brand-soft: rgba(217, 119, 6, 0.08);
+    --brand-glow: rgba(217, 119, 6, 0.15);
+
+    /* Semantic */
     --signal: #0F766E;
-    --signal-soft: rgba(15, 118, 110, 0.10);
+    --signal-soft: rgba(15, 118, 110, 0.08);
     --success: #15803D;
+    --success-soft: rgba(21, 128, 61, 0.08);
     --warning: #B45309;
+    --warning-soft: rgba(180, 83, 9, 0.08);
     --danger: #B91C1C;
-    --blueprint: #1D4ED8;
-    --shadow: 0 18px 44px rgba(124, 45, 18, 0.13);
-    --shadow-soft: 0 8px 24px rgba(124, 45, 18, 0.09);
-    --app-bg: radial-gradient(circle at 16% 0%, rgba(251, 146, 60, 0.30), transparent 31rem),
-        radial-gradient(circle at 88% 20%, rgba(253, 186, 116, 0.24), transparent 26rem),
-        linear-gradient(180deg, #FFF7ED 0%, #FFF3E6 48%, #FFFCF8 100%);
-    --header-border: rgba(194, 101, 32, 0.22);
-    --sidebar-bg: radial-gradient(circle at 50% 0%, rgba(251, 146, 60, 0.30), transparent 16rem),
-        linear-gradient(180deg, #FFF4E8 0%, #FFE9D2 52%, #FFF9F2 100%);
-    --sidebar-border: rgba(194, 101, 32, 0.24);
-    --sidebar-text: #3A2414;
-    --sidebar-title: #1C120A;
-    --sidebar-muted: #7C5F4B;
-    --sidebar-eyebrow: #C2410C;
-    --sidebar-meta: #6B4A33;
-    --sidebar-brand-border: rgba(234, 88, 12, 0.28);
-    --sidebar-brand-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 237, 213, 0.68)),
-        rgba(255, 255, 255, 0.50);
-    --sidebar-brand-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-    --sidebar-card-border: rgba(234, 88, 12, 0.20);
-    --sidebar-card-bg: rgba(255, 255, 255, 0.58);
-    --sidebar-radio-bg: rgba(255, 255, 255, 0.54);
-    --sidebar-radio-hover-bg: rgba(234, 88, 12, 0.12);
-    --sidebar-radio-hover-border: rgba(234, 88, 12, 0.42);
-    --sidebar-radio-selected-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.16), rgba(15, 118, 110, 0.10));
-    --sidebar-radio-selected-border: rgba(234, 88, 12, 0.56);
-    --sidebar-path-bg: rgba(255, 255, 255, 0.68);
-    --sidebar-path-text: #6B4A33;
-    --path-bg: rgba(255, 255, 255, 0.78);
-    --button-bg: #FFFFFF;
-    --button-hover-shadow: 0 10px 24px rgba(124, 45, 18, 0.12);
-    --dropzone-bg: linear-gradient(135deg, rgba(255, 247, 237, 0.96), rgba(255, 255, 255, 0.92));
-    --table-header-bg: #FFF1E3;
-    --code-border: rgba(234, 88, 12, 0.20);
-    --tab-bg: rgba(255, 255, 255, 0.66);
-    --popover-bg: #FFFFFF;
-    --option-bg: #FFFFFF;
-    --option-hover-bg: rgba(234, 88, 12, 0.12);
-    --alert-bg: rgba(255, 255, 255, 0.92);
-    --input-bg: #FFFFFF;
-    --input-text: #1C120A;
-    --input-placeholder: #7C5F4B;
-    --upload-button-bg: #FFFFFF;
-    --upload-button-text: #C2410C;
+    --danger-soft: rgba(185, 28, 28, 0.06);
+
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --radius-full: 999px;
+
+    --shadow-sm: 0 1px 2px rgba(26, 24, 21, 0.04);
+    --shadow: 0 1px 3px rgba(26, 24, 21, 0.06), 0 4px 16px rgba(26, 24, 21, 0.04);
+    --shadow-lg: 0 2px 6px rgba(26, 24, 21, 0.05), 0 8px 32px rgba(26, 24, 21, 0.06);
+
+    /* Layout */
+    --sidebar-width: 17rem;
+    --content-max: 1200px;
+
+    /* Sidebar (light) */
+    --sidebar-bg: #F5F1EB;
+    --sidebar-border: #E7E2DB;
+    --sidebar-text: #3D3833;
+    --sidebar-muted: #78716C;
 }
 
+/* ═══════════════════════════════════════════
+   DARK MODE — warm dark, not cold
+   ═══════════════════════════════════════════ */
 :root.theme-dark,
 :root:has(#fs-theme-dark) {
-    --bg: #090705;
-    --bg-grid: rgba(251, 146, 60, 0.08);
-    --surface: #15110D;
-    --surface-raised: #1D1711;
-    --surface-strong: #080604;
-    --ink: #FFF7ED;
-    --ink-2: #FED7AA;
-    --muted: #C9A586;
-    --faint: #8B735F;
-    --line: rgba(251, 146, 60, 0.20);
-    --line-strong: rgba(251, 146, 60, 0.42);
-    --brand-soft: rgba(234, 88, 12, 0.16);
-    --signal: #2DD4BF;
-    --signal-soft: rgba(45, 212, 191, 0.14);
-    --success: #4ADE80;
-    --warning: #F59E0B;
-    --danger: #F87171;
-    --blueprint: #60A5FA;
-    --shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
-    --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.26);
-    --app-bg: radial-gradient(circle at 18% 0%, rgba(234, 88, 12, 0.28), transparent 34rem),
-        radial-gradient(circle at 88% 18%, rgba(249, 115, 22, 0.16), transparent 28rem),
-        linear-gradient(180deg, #0D0906 0%, #090705 54%, #130C07 100%);
-    --header-border: rgba(251, 146, 60, 0.16);
-    --sidebar-bg: radial-gradient(circle at 50% 0%, rgba(234, 88, 12, 0.28), transparent 18rem),
-        linear-gradient(180deg, #130C07 0%, #0B0907 48%, #090705 100%);
-    --sidebar-border: rgba(251, 146, 60, 0.18);
-    --sidebar-text: #F3F4F6;
-    --sidebar-title: #FFFFFF;
-    --sidebar-muted: #AEB7C6;
-    --sidebar-eyebrow: #FDBA74;
-    --sidebar-meta: #CBD5E1;
-    --sidebar-brand-border: rgba(251, 146, 60, 0.22);
-    --sidebar-brand-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.24), rgba(146, 64, 14, 0.12)),
-        rgba(255, 247, 237, 0.035);
-    --sidebar-brand-shadow: inset 0 1px 0 rgba(255, 247, 237, 0.08);
-    --sidebar-card-border: rgba(251, 146, 60, 0.16);
-    --sidebar-card-bg: rgba(255, 247, 237, 0.04);
-    --sidebar-radio-bg: rgba(255, 247, 237, 0.035);
-    --sidebar-radio-hover-bg: rgba(234, 88, 12, 0.14);
-    --sidebar-radio-hover-border: rgba(251, 146, 60, 0.45);
-    --sidebar-radio-selected-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.26), rgba(15, 118, 110, 0.18));
-    --sidebar-radio-selected-border: rgba(251, 146, 60, 0.65);
-    --sidebar-path-bg: rgba(255, 255, 255, 0.055);
-    --sidebar-path-text: #CBD5E1;
-    --path-bg: rgba(21, 17, 13, 0.86);
-    --button-bg: #1D1711;
-    --button-hover-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
-    --dropzone-bg: linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(21, 17, 13, 0.92));
-    --table-header-bg: #21170F;
-    --code-border: rgba(251, 146, 60, 0.24);
-    --tab-bg: rgba(21, 17, 13, 0.58);
-    --popover-bg: #15110D;
-    --option-bg: #15110D;
-    --option-hover-bg: rgba(234, 88, 12, 0.18);
-    --alert-bg: rgba(21, 17, 13, 0.92);
-    --input-bg: #17110D;
-    --input-text: #FFF7ED;
-    --input-placeholder: #E7C49F;
-    --upload-button-bg: #FFF7ED;
-    --upload-button-text: #9A3412;
+    --bg: #1A1815;
+    --surface: #252220;
+    --surface-raised: #2D2A27;
+    --ink: #F5F1EB;
+    --ink-2: #D1CCC4;
+    --muted: #A8A29E;
+    --faint: #78716C;
+    --line: #3D3833;
+    --line-strong: #57534E;
+    --brand-soft: rgba(217, 119, 6, 0.14);
+    --signal-soft: rgba(45, 212, 191, 0.10);
+    --success-soft: rgba(74, 222, 128, 0.10);
+    --warning-soft: rgba(245, 158, 11, 0.10);
+    --danger-soft: rgba(248, 113, 113, 0.10);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.16);
+    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.24), 0 8px 32px rgba(0, 0, 0, 0.22);
+    --sidebar-bg: #211E1B;
+    --sidebar-border: #3D3833;
+    --sidebar-text: #D1CCC4;
+    --sidebar-muted: #78716C;
 }
 
-* {
-    box-sizing: border-box;
-}
+/* ═══════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body, [class*="css"] {
-    font-family: "Fira Sans", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .stApp {
-    background: var(--app-bg);
+    background: var(--bg);
     color: var(--ink);
 }
 
-.stApp::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background:
-        linear-gradient(var(--bg-grid) 1px, transparent 1px),
-        linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
-    background-size: 32px 32px;
-    mask-image: linear-gradient(180deg, rgba(0,0,0,0.75), transparent 68%);
-    z-index: 0;
-}
-
-[data-testid="stAppViewContainer"],
-[data-testid="stHeader"] {
-    background: transparent;
-}
-
+/* Hide Streamlit chrome */
 [data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
-#MainMenu,
-footer {
-    display: none !important;
+#MainMenu, footer,
+.stDeployButton { display: none !important; }
+
+[data-testid="stAppViewContainer"] { background: transparent; }
+
+.main .block-container {
+    max-width: var(--content-max);
+    padding: 2rem 2.5rem 5rem;
 }
 
-/* 侧边栏永不收起 */
+/* ═══════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════ */
 section[data-testid="stSidebar"] {
     display: flex !important;
     visibility: visible !important;
-    width: 21rem !important;
-    min-width: 21rem !important;
+    width: var(--sidebar-width) !important;
+    min-width: var(--sidebar-width) !important;
     transform: none !important;
     transition: none !important;
-}
-/* 隐藏侧边栏关闭按钮 */
-button[data-testid="stSidebarCloseButton"],
-[data-testid="stSidebarCollapseButton"] {
-    display: none !important;
-}
-
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stText"] {
-    color: var(--ink-2);
-}
-
-[data-testid="stHeader"] {
-    border-bottom: 1px solid var(--header-border);
-    backdrop-filter: blur(14px);
-}
-
-.main .block-container {
-    position: relative;
-    z-index: 1;
-    max-width: 1440px;
-    padding-top: 1.25rem;
-    padding-bottom: 4rem;
-}
-
-/* 侧边栏 */
-[data-testid="stSidebar"] {
     background: var(--sidebar-bg);
     border-right: 1px solid var(--sidebar-border);
 }
+button[data-testid="stSidebarCloseButton"],
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
 
-[data-testid="stSidebar"] > div {
-    padding-top: 1.2rem;
-}
+[data-testid="stSidebar"] > div { padding: 1.5rem 1rem; }
 
-[data-testid="stSidebar"] * {
-    color: var(--sidebar-text) !important;
-}
+[data-testid="stSidebar"] * { color: var(--sidebar-text) !important; }
 
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stSidebar"] .stCaption,
-[data-testid="stSidebar"] small {
-    color: #AEB7C6 !important;
-    color: var(--sidebar-muted) !important;
-}
+[data-testid="stSidebar"] small { color: var(--sidebar-muted) !important; }
 
+/* Sidebar: brand card */
 .sidebar-brand {
-    border: 1px solid var(--sidebar-brand-border);
-    border-radius: 10px;
-    padding: 16px 16px 14px;
-    background: var(--sidebar-brand-bg);
-    box-shadow: var(--sidebar-brand-shadow);
-    margin-bottom: 16px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius);
+    padding: 16px 18px 14px;
+    background: var(--surface);
+    margin-bottom: 18px;
 }
-
 .sidebar-brand__eyebrow {
-    font-family: "Fira Code", monospace;
-    font-size: 0.68rem;
-    color: var(--sidebar-eyebrow) !important;
-    letter-spacing: 0.12em;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--brand) !important;
+    letter-spacing: 0.10em;
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
-
 .sidebar-brand__title {
-    font-size: 1.2rem;
-    line-height: 1.25;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    line-height: 1.2;
     font-weight: 700;
-    color: var(--sidebar-title) !important;
+    color: var(--ink) !important;
 }
-
 .sidebar-brand__meta {
-    margin-top: 10px;
-    font-size: 0.82rem;
-    color: var(--sidebar-meta) !important;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--muted) !important;
+    font-family: var(--font-mono);
 }
 
+/* Sidebar: stat grid */
 .sidebar-stat-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin: 14px 0 18px;
+    gap: 6px;
+    margin: 14px 0 20px;
 }
-
 .sidebar-stat {
-    min-height: 54px;
-    border: 1px solid var(--sidebar-card-border);
-    border-radius: 8px;
-    padding: 8px;
-    background: var(--sidebar-card-bg);
+    text-align: center;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 6px;
+    background: var(--surface);
 }
-
 .sidebar-stat b {
     display: block;
-    font-family: "Fira Code", monospace;
-    font-size: 1rem;
-    color: var(--sidebar-title) !important;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink) !important;
 }
-
 .sidebar-stat span {
     display: block;
     margin-top: 2px;
-    font-size: 0.7rem;
-    color: var(--sidebar-muted) !important;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted) !important;
 }
 
+/* Sidebar: radio navigation */
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 4px; }
 [data-testid="stSidebar"] [role="radiogroup"] label {
-    min-height: 44px;
-    padding: 9px 10px;
-    margin-bottom: 8px;
-    border: 1px solid var(--sidebar-card-border);
-    border-radius: 8px;
-    background: var(--sidebar-radio-bg);
-    transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    min-height: 40px;
+    padding: 8px 12px;
+    margin-bottom: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    transition: background 150ms ease;
 }
-
-[data-testid="stSidebar"] [role="radiogroup"] {
-    gap: 8px;
-}
-
 [data-testid="stSidebar"] [role="radiogroup"] label p {
+    font-family: var(--font-body);
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
     color: var(--sidebar-text) !important;
-    font-weight: 700;
 }
-
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background: var(--sidebar-radio-hover-bg);
-    border-color: var(--sidebar-radio-hover-border);
-    transform: translateX(2px);
+    background: var(--brand-soft);
 }
-
 [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-    background: var(--sidebar-radio-selected-bg);
-    border-color: var(--sidebar-radio-selected-border);
+    background: var(--brand-soft);
+    border-color: var(--brand);
 }
-
 [data-testid="stSidebar"] .stRadio > label {
-    color: var(--sidebar-muted) !important;
-    font-family: "Fira Code", monospace !important;
-    font-size: 0.72rem !important;
-    letter-spacing: 0.06em !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
+    color: var(--sidebar-muted) !important;
 }
 
+/* Sidebar: buttons */
 [data-testid="stSidebar"] button {
-    min-height: 44px;
-    background: #F97316 !important;
-    color: #111827 !important;
-    border: 0 !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
+    min-height: 38px;
+    border-radius: var(--radius-sm) !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    background: var(--surface) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    transition: all 150ms ease;
+}
+[data-testid="stSidebar"] button:hover {
+    border-color: var(--brand) !important;
+    background: var(--brand-soft) !important;
 }
 
-/* 页面页头和分区 */
+/* ═══════════════════════════════════════════
+   PAGE HERO — editorial header
+   ═══════════════════════════════════════════ */
 .fs-hero {
     position: relative;
-    overflow: hidden;
-    border: 1px solid var(--hero-border);
-    border-radius: 12px;
-    padding: 24px 26px;
-    margin: 0 0 22px;
-    color: #FFFFFF;
-    background: var(--hero-bg);
-    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 32px 36px;
+    margin: 0 0 32px;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
 }
-
-.fs-hero::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-        linear-gradient(var(--hero-grid-y) 1px, transparent 1px),
-        linear-gradient(90deg, var(--hero-grid-x) 1px, transparent 1px);
-    background-size: 28px 28px;
-    opacity: 0.35;
-}
-
-.fs-hero > * {
-    position: relative;
-    z-index: 1;
-}
-
 .fs-hero__kicker {
     display: inline-flex;
     align-items: center;
-    min-height: 28px;
-    padding: 5px 9px;
-    border: 1px solid rgba(253, 186, 116, 0.42);
-    border-radius: 999px;
-    color: #FDBA74;
-    background: rgba(234, 88, 12, 0.12);
-    font-family: "Fira Code", monospace;
-    font-size: 0.72rem;
+    min-height: 26px;
+    padding: 4px 10px;
+    border: 1px solid var(--brand-glow);
+    border-radius: var(--radius-full);
+    color: var(--brand);
+    background: var(--brand-soft);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
-
 .fs-hero__title {
-    margin: 14px 0 8px;
-    color: #FFFFFF;
-    font-size: clamp(1.75rem, 3vw, 2.7rem);
-    line-height: 1.08;
+    margin: 14px 0 10px;
+    font-family: var(--font-display);
+    color: var(--ink);
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    line-height: 1.12;
     font-weight: 700;
+    letter-spacing: -0.01em;
 }
-
 .fs-hero__desc {
-    max-width: 860px;
-    color: var(--hero-desc);
+    max-width: 720px;
+    color: var(--muted);
     font-size: 1rem;
-    line-height: 1.75;
+    line-height: 1.7;
     margin: 0;
+    font-family: var(--font-body);
 }
-
 .fs-hero__rail {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     margin-top: 18px;
 }
-
 .fs-chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-height: 32px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--chip-border);
-    background: var(--chip-bg);
-    color: var(--chip-text);
-    font-family: "Fira Code", monospace;
-    font-size: 0.76rem;
+    min-height: 30px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--line);
+    background: var(--surface-raised);
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
 }
 
+/* ═══════════════════════════════════════════
+   SECTION TITLES
+   ═══════════════════════════════════════════ */
 .section-title {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 18px;
-    margin: 24px 0 12px;
+    gap: 16px;
+    margin: 32px 0 14px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--line);
 }
-
 .section-title h2 {
     margin: 0 !important;
+    font-family: var(--font-display) !important;
+    font-size: 1.15rem !important;
+    line-height: 1.3 !important;
+    font-weight: 600 !important;
     color: var(--ink) !important;
-    font-size: 1.12rem !important;
-    line-height: 1.2 !important;
-    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
 }
-
 .section-title p {
-    margin: 6px 0 0 !important;
+    margin: 4px 0 0 !important;
     color: var(--muted) !important;
-    font-size: 0.9rem !important;
+    font-size: 0.85rem !important;
 }
-
 .section-title__tag {
     flex: 0 0 auto;
-    font-family: "Fira Code", monospace;
-    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
     color: var(--signal);
-    border: 1px solid rgba(15, 118, 110, 0.25);
+    border: 1px solid rgba(15, 118, 110, 0.2);
     background: var(--signal-soft);
-    border-radius: 999px;
-    padding: 5px 9px;
-}
-
-.inline-note {
-    border-left: 3px solid var(--brand);
-    background: var(--brand-soft);
-    color: #FED7AA;
-    padding: 10px 12px;
-    border-radius: 0 8px 8px 0;
-    font-size: 0.9rem;
-    line-height: 1.55;
+    border-radius: var(--radius-full);
+    padding: 4px 10px;
+    font-weight: 500;
 }
 
 .path-chip {
     display: inline-block;
     max-width: 100%;
-    padding: 6px 9px;
-    border-radius: 7px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--line);
-    background: var(--path-bg);
+    background: var(--surface-raised);
     color: var(--ink-2);
-    font-family: "Fira Code", monospace;
-    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
     overflow-wrap: anywhere;
 }
 
-[data-testid="stSidebar"] .path-chip {
-    border-color: rgba(255, 255, 255, 0.12);
-    background: var(--sidebar-path-bg);
-    color: var(--sidebar-path-text) !important;
-}
-
-/* 标题系统 */
+/* ═══════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════ */
 h1, h2, h3, h4,
 .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    font-family: "Fira Sans", "Noto Sans SC", sans-serif !important;
-    letter-spacing: 0 !important;
+    font-family: var(--font-display) !important;
+    letter-spacing: -0.01em !important;
     color: var(--ink) !important;
 }
+h1 { font-size: 1.8rem !important; font-weight: 700 !important; }
+h2 { font-size: 1.25rem !important; font-weight: 600 !important; }
+h3 { font-size: 1.05rem !important; font-weight: 600 !important; color: var(--ink-2) !important; }
 
-h1 {
-    font-size: 1.7rem !important;
-    font-weight: 700 !important;
+pre, code {
+    font-family: var(--font-mono) !important;
+    font-size: 0.84rem;
 }
 
-h2 {
-    font-size: 1.26rem !important;
-    font-weight: 700 !important;
-}
-
-h3 {
-    font-size: 1.06rem !important;
-    font-weight: 700 !important;
-    color: var(--ink-2) !important;
-}
-
-/* 指标卡 */
+/* ═══════════════════════════════════════════
+   METRIC CARDS — clean, minimal
+   ═══════════════════════════════════════════ */
 [data-testid="stMetric"] {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 15px 16px !important;
-    box-shadow: var(--shadow-soft);
-    min-height: 104px;
-    position: relative;
-    overflow: hidden;
+    padding: 16px 20px !important;
+    box-shadow: none;
+    min-height: 96px;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-
-[data-testid="stMetric"]::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(180deg, var(--brand), var(--signal));
-}
-
 [data-testid="stMetric"]:hover {
     border-color: var(--line-strong);
     box-shadow: var(--shadow);
 }
-
 [data-testid="stMetric"] label {
-    font-family: "Fira Code", monospace !important;
-    font-size: 0.72rem !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.68rem !important;
     color: var(--muted) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.06em !important;
+    font-weight: 500 !important;
 }
-
 [data-testid="stMetric"] [data-testid="stMetricValue"] {
-    font-family: "Fira Code", monospace !important;
+    font-family: var(--font-display) !important;
     font-weight: 600 !important;
-    font-size: 1.35rem !important;
+    font-size: 1.5rem !important;
     color: var(--ink) !important;
 }
 
-/* 表单和按钮 */
+/* ═══════════════════════════════════════════
+   BUTTONS — warm, refined
+   ═══════════════════════════════════════════ */
 .stButton > button,
 .stDownloadButton > button {
     min-height: 44px !important;
-    border-radius: 8px !important;
-    font-family: "Fira Sans", "Noto Sans SC", sans-serif !important;
-    font-weight: 700 !important;
-    border: 1px solid var(--line-strong) !important;
-    background: var(--button-bg) !important;
+    border-radius: var(--radius-sm) !important;
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    border: 1px solid var(--line) !important;
+    background: var(--surface) !important;
     color: var(--ink) !important;
-    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease !important;
-}
-
-.stButton > button {
+    transition: all 150ms ease !important;
     cursor: pointer;
 }
-
 .stButton > button:hover,
 .stDownloadButton > button:hover {
-    transform: translateY(-1px) !important;
     border-color: var(--brand) !important;
-    box-shadow: var(--button-hover-shadow) !important;
+    background: var(--brand-soft) !important;
+    box-shadow: var(--shadow-sm);
+    transform: none !important;
 }
-
 .stButton > button[kind="primary"],
 .stDownloadButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #EA580C 0%, #F59E0B 100%) !important;
-    color: #111827 !important;
-    border-color: transparent !important;
-    box-shadow: 0 12px 24px rgba(234, 88, 12, 0.24) !important;
+    background: var(--brand) !important;
+    color: #FFFFFF !important;
+    border-color: var(--brand) !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+}
+.stButton > button[kind="primary"]:hover,
+.stDownloadButton > button[kind="primary"]:hover {
+    background: var(--brand-hover) !important;
+    border-color: var(--brand-hover) !important;
 }
 
+/* Focus ring */
 .stButton > button:focus-visible,
 .stDownloadButton > button:focus-visible,
-input:focus,
-textarea:focus,
+input:focus, textarea:focus,
 [data-baseweb="select"]:focus-within {
-    outline: 3px solid rgba(234, 88, 12, 0.25) !important;
+    outline: 2px solid var(--brand) !important;
     outline-offset: 2px !important;
 }
 
+/* ═══════════════════════════════════════════
+   FORMS & INPUTS
+   ═══════════════════════════════════════════ */
 .stSelectbox [data-baseweb="select"],
 .stMultiSelect [data-baseweb="select"],
 .stTextInput input,
 .stNumberInput input,
 .stFileUploader [data-testid="stFileUploaderDropzone"] {
-    border-radius: 8px !important;
+    border-radius: var(--radius-sm) !important;
     border-color: var(--line) !important;
-    background: var(--input-bg) !important;
+    background: var(--surface) !important;
     min-height: 44px;
-    font-family: "Fira Sans", "Noto Sans SC", sans-serif !important;
-    font-size: 0.92rem !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.9rem !important;
 }
-
 .stTextInput input,
 .stNumberInput input,
-textarea {
-    color: var(--input-text) !important;
-}
-
+textarea { color: var(--ink) !important; }
 .stTextInput input::placeholder,
 .stNumberInput input::placeholder {
-    color: var(--input-placeholder) !important;
+    color: var(--faint) !important;
     opacity: 1 !important;
 }
-
 .stSelectbox [data-baseweb="select"] *,
-.stMultiSelect [data-baseweb="select"] * {
-    color: var(--input-text) !important;
-}
-
+.stMultiSelect [data-baseweb="select"] * { color: var(--ink) !important; }
 .stSelectbox [data-baseweb="select"] > div,
 .stMultiSelect [data-baseweb="select"] > div,
 .stSelectbox [data-baseweb="select"] input,
 .stMultiSelect [data-baseweb="select"] input {
-    background: var(--input-bg) !important;
-    color: var(--input-text) !important;
+    background: var(--surface) !important;
+    color: var(--ink) !important;
 }
-
-.stSelectbox [data-baseweb="select"] [aria-disabled="true"],
-.stSelectbox [data-baseweb="select"] [data-testid="stWidgetLabel"],
-.stSelectbox [data-baseweb="select"] span,
-.stMultiSelect [data-baseweb="select"] span {
-    color: var(--input-placeholder) !important;
-}
-
 .stSelectbox [data-baseweb="select"]:hover,
 .stTextInput input:hover,
 .stNumberInput input:hover,
@@ -808,200 +525,198 @@ textarea {
     border-color: var(--line-strong) !important;
 }
 
+/* Sliders */
 .stSlider [data-baseweb="slider"] [role="slider"],
 [data-baseweb="slider"] [data-baseweb="slider__thumb"] {
     background: var(--brand) !important;
     border-color: var(--brand) !important;
 }
 
-.stCheckbox label,
-.stRadio label,
-.stSelectbox label,
-.stTextInput label,
-.stNumberInput label,
-.stSlider label,
-.stFileUploader label,
-.stMultiSelect label {
+/* Labels */
+.stCheckbox label, .stRadio label,
+.stSelectbox label, .stTextInput label,
+.stNumberInput label, .stSlider label,
+.stFileUploader label, .stMultiSelect label {
     color: var(--ink-2) !important;
-    font-weight: 600 !important;
+    font-weight: 500 !important;
+    font-size: 0.88rem !important;
 }
 
+/* File uploader dropzone */
 .stFileUploader [data-testid="stFileUploaderDropzone"] {
     border-style: dashed !important;
-    background: var(--dropzone-bg) !important;
+    border-color: var(--line) !important;
+    background: var(--surface-raised) !important;
+    border-radius: var(--radius) !important;
 }
-
-.stFileUploader [data-testid="stFileUploaderDropzone"] * {
-    color: var(--ink-2) !important;
-}
-
+.stFileUploader [data-testid="stFileUploaderDropzone"] * { color: var(--muted) !important; }
 .stFileUploader [data-testid="stFileUploaderDropzone"] button {
-    background: var(--upload-button-bg) !important;
-    color: var(--upload-button-text) !important;
-    border-color: var(--line-strong) !important;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18) !important;
+    background: var(--surface) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    font-family: var(--font-body) !important;
+    font-size: 0.85rem !important;
 }
 
-.stRadio [role="radiogroup"] {
-    gap: 8px;
-}
+.stRadio [role="radiogroup"] { gap: 6px; }
+.stRadio [role="radiogroup"] label { min-height: 40px; }
 
-.stRadio [role="radiogroup"] label {
-    min-height: 44px;
-}
-
-/* 表格、图表、输出 */
+/* ═══════════════════════════════════════════
+   TABLES & DATA
+   ═══════════════════════════════════════════ */
 [data-testid="stDataFrame"] {
     border-radius: var(--radius) !important;
     overflow: hidden !important;
     border: 1px solid var(--line) !important;
-    box-shadow: var(--shadow-soft);
+    box-shadow: none;
 }
-
 [data-testid="stDataFrame"] th {
-    font-family: "Fira Sans", "Noto Sans SC", sans-serif !important;
-    font-weight: 600 !important;
-    background: var(--table-header-bg) !important;
-    color: var(--ink-2) !important;
+    font-family: var(--font-mono) !important;
+    font-weight: 500 !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--surface-raised) !important;
+    color: var(--muted) !important;
+    border-bottom: 1px solid var(--line) !important;
 }
-
 [data-testid="stDataFrame"] td {
-    font-family: "Fira Code", monospace !important;
-    font-size: 0.88rem !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.85rem !important;
     color: var(--ink) !important;
 }
 
-[data-testid="stImage"] {
-    border-radius: 10px;
-    overflow: hidden;
-}
-
+/* ═══════════════════════════════════════════
+   IMAGES
+   ═══════════════════════════════════════════ */
+[data-testid="stImage"] { border-radius: var(--radius); overflow: hidden; }
 [data-testid="stImage"] img {
-    border-radius: 10px;
+    border-radius: var(--radius);
     border: 1px solid var(--line);
-    background: var(--image-bg);
-    box-shadow: var(--shadow-soft);
+    background: var(--surface);
 }
-
 [data-testid="stImageCaption"] {
     color: var(--muted) !important;
-    font-family: "Fira Code", monospace !important;
-    font-size: 0.78rem !important;
+    font-family: var(--font-mono) !important;
+    font-size: 0.74rem !important;
 }
 
+/* ═══════════════════════════════════════════
+   CODE BLOCKS
+   ═══════════════════════════════════════════ */
 [data-testid="stCodeBlock"] {
-    border: 1px solid var(--code-border) !important;
-    border-radius: 8px !important;
-    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--surface-raised) !important;
 }
 
-pre, code {
-    font-family: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace !important;
-}
-
-/* Tabs、展开器和提示 */
+/* ═══════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════ */
 .stTabs [data-baseweb="tab"] {
-    min-height: 44px;
-    padding: 10px 18px !important;
-    font-weight: 700 !important;
+    min-height: 42px;
+    padding: 8px 20px !important;
+    font-family: var(--font-body) !important;
+    font-weight: 500 !important;
+    font-size: 0.88rem !important;
     color: var(--muted) !important;
-    border-radius: 8px 8px 0 0 !important;
-    background: var(--tab-bg) !important;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0 !important;
+    background: transparent !important;
+    border-bottom: 2px solid transparent;
 }
-
 .stTabs [data-baseweb="tab"]:hover {
     color: var(--ink) !important;
-    background: rgba(234, 88, 12, 0.08) !important;
+    background: var(--brand-soft) !important;
 }
-
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
     color: var(--brand) !important;
     border-bottom-color: var(--brand) !important;
 }
 
+/* ═══════════════════════════════════════════
+   EXPANDER
+   ═══════════════════════════════════════════ */
 [data-testid="stExpander"] {
     border: 1px solid var(--line) !important;
     border-radius: var(--radius) !important;
     background: var(--surface) !important;
-    box-shadow: var(--shadow-soft);
 }
+[data-testid="stExpander"] * { color: var(--ink-2); }
 
-[data-testid="stExpander"] * {
-    color: var(--ink-2);
-}
-
-[role="listbox"],
-[data-baseweb="popover"] {
-    background: var(--popover-bg) !important;
+/* ═══════════════════════════════════════════
+   POPOVER / DROPDOWN
+   ═══════════════════════════════════════════ */
+[role="listbox"], [data-baseweb="popover"] {
+    background: var(--surface) !important;
     border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: var(--shadow-lg) !important;
 }
-
 [role="option"] {
     color: var(--ink) !important;
-    background: var(--option-bg) !important;
+    background: var(--surface) !important;
+    font-family: var(--font-body) !important;
 }
+[role="option"]:hover { background: var(--brand-soft) !important; }
 
-[role="option"]:hover {
-    background: var(--option-hover-bg) !important;
-}
-
+/* ═══════════════════════════════════════════
+   ALERTS
+   ═══════════════════════════════════════════ */
 [data-testid="stAlert"] {
-    border-radius: 8px !important;
+    border-radius: var(--radius-sm) !important;
     border: 1px solid var(--line) !important;
-    background: var(--alert-bg) !important;
-    border-left-width: 4px !important;
-    box-shadow: var(--shadow-soft);
+    background: var(--surface) !important;
+    font-family: var(--font-body) !important;
 }
 
+/* ═══════════════════════════════════════════
+   PROGRESS
+   ═══════════════════════════════════════════ */
 [data-testid="stProgress"] > div > div {
-    background: linear-gradient(90deg, var(--brand), var(--signal)) !important;
+    background: var(--brand) !important;
 }
 
+/* ═══════════════════════════════════════════
+   CHARTS
+   ═══════════════════════════════════════════ */
 [data-testid="stArrowVegaLiteChart"],
 [data-testid="stPyplotGlobalUseContainer"] {
     background: var(--surface) !important;
     border: 1px solid var(--line) !important;
     border-radius: var(--radius) !important;
-    padding: 16px !important;
-    box-shadow: var(--shadow-soft);
+    padding: 20px !important;
 }
 
 hr, .stDivider {
     border-color: var(--line) !important;
-    margin: 1.35rem 0 !important;
+    margin: 1.5rem 0 !important;
 }
 
 .stCaption, .stMarkdown small {
     color: var(--muted) !important;
-    font-size: 0.82rem !important;
+    font-size: 0.8rem !important;
 }
 
-/* Streamlit 默认块间距略收紧，保留数据密度 */
-div[data-testid="stVerticalBlock"] {
-    gap: 0.75rem;
-}
+div[data-testid="stVerticalBlock"] { gap: 0.75rem; }
 
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════ */
 @media (max-width: 768px) {
     .main .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-        padding-top: 1rem;
+        padding: 1rem 1rem 3rem;
     }
     .fs-hero {
-        padding: 18px;
-        border-radius: 10px;
+        padding: 22px 20px;
+        border-radius: var(--radius);
     }
-    .fs-hero__title {
-        font-size: 1.65rem;
-    }
-    .section-title {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 8px;
-    }
-    [data-testid="stMetric"] {
-        min-height: 92px;
-        padding: 12px 14px !important;
+    .fs-hero__title { font-size: 1.5rem; }
+    .section-title { flex-direction: column; align-items: flex-start; gap: 6px; }
+    [data-testid="stMetric"] { min-height: 88px; padding: 12px 16px !important; }
+    section[data-testid="stSidebar"] {
+        width: 100% !important;
+        min-width: unset !important;
     }
 }
 
@@ -1018,6 +733,9 @@ div[data-testid="stVerticalBlock"] {
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = SCRIPT_DIR / ".streamlit_uploads"
+
+# 注册自定义模块到 ultralytics，使 YOLO() 能识别 MobileNetV3_Backbone 等自定义组件
+import custom_models.custom_yolov11_mobilenetv3  # noqa: F401
 
 
 # ═══════════════════════════════════════════
@@ -1182,6 +900,10 @@ def parse_data_yaml(yaml_path: str) -> dict | None:
         st.error(f"无法读取 {yaml_path}: {e}")
         return None
 
+    if not isinstance(data, dict):
+        st.error(f"{yaml_path} 内容格式错误：需要 YAML 字典，实际为 {type(data).__name__}")
+        return None
+
     train_path = data.get("train", "")
     val_path = data.get("val", "")
     test_path = data.get("test", "")
@@ -1260,8 +982,8 @@ def get_image_files(dir_path: str, limit=500) -> list[str]:
     return files
 
 
-@st.cache_resource(show_spinner=False)
-def load_model_cached(model_path: str):
+@st.cache_resource(show_spinner=False, max_entries=3)
+def load_model_cached(model_path: str, _mtime: float = 0.0):
     from ultralytics import YOLO
     return YOLO(model_path)
 
@@ -1379,10 +1101,19 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
             help="将完整数据集文件夹（含 data.yaml + train/valid/test 子目录）打包为 zip，拖入即可自动解压导入。",
         )
         if zip_upload is not None:
-            result = _extract_dataset_zip(zip_upload)
-            if result:
-                st.session_state[f"{key_prefix}_last_ds"] = result
-                return result
+            import hashlib as _hashlib
+            zip_fingerprint = _hashlib.sha256(zip_upload.getbuffer()).hexdigest()
+            if st.session_state.get(f"{key_prefix}_zip_processed") != zip_fingerprint:
+                result = _extract_dataset_zip(zip_upload)
+                if result:
+                    st.session_state[f"{key_prefix}_zip_processed"] = zip_fingerprint
+                    st.session_state[f"{key_prefix}_last_ds"] = result
+                    scan_datasets.clear()
+                    return result
+            else:
+                persisted = st.session_state.get(f"{key_prefix}_last_ds", "")
+                if persisted and Path(persisted).exists():
+                    return persisted
 
     with tab2:
         uploaded = st.file_uploader(
@@ -1392,23 +1123,31 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
             help="仅上传 data.yaml。若内部使用相对路径，图片目录需手动放置在 WSL 中。",
         )
         if uploaded is not None:
-            uploaded_path = save_uploaded_file(uploaded, "datasets")
-            ui_path_chip(uploaded_path, "已上传数据集配置")
-            parsed = parse_data_yaml(uploaded_path)
-            if parsed:
-                missing = []
-                for split_name in ["train", "val", "test"]:
-                    sp = parsed.get(split_name, "")
-                    if sp and not Path(sp).exists():
-                        missing.append(split_name)
-                if missing:
-                    st.warning(
-                        f"数据集目录缺失: {', '.join(missing)}。"
-                        "建议将完整数据集打包为 zip 通过左侧 Tab 上传，"
-                        "或将图片目录手动放入 WSL 后使用下方「手动输入路径」。",
-                    )
-            st.session_state[f"{key_prefix}_last_ds"] = uploaded_path
-            return uploaded_path
+            import hashlib as _hashlib
+            yaml_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
+            if st.session_state.get(f"{key_prefix}_yaml_processed") != yaml_fp:
+                st.session_state[f"{key_prefix}_yaml_processed"] = yaml_fp
+                uploaded_path = save_uploaded_file(uploaded, "datasets")
+                ui_path_chip(uploaded_path, "已上传数据集配置")
+                parsed = parse_data_yaml(uploaded_path)
+                if parsed:
+                    missing = []
+                    for split_name in ["train", "val", "test"]:
+                        sp = parsed.get(split_name, "")
+                        if sp and not Path(sp).exists():
+                            missing.append(split_name)
+                    if missing:
+                        st.warning(
+                            f"数据集目录缺失: {', '.join(missing)}。"
+                            "建议将完整数据集打包为 zip 通过左侧 Tab 上传，"
+                            "或将图片目录手动放入 WSL 后使用下方「手动输入路径」。",
+                        )
+                st.session_state[f"{key_prefix}_last_ds"] = uploaded_path
+                return uploaded_path
+            else:
+                persisted = st.session_state.get(f"{key_prefix}_last_ds", "")
+                if persisted and Path(persisted).exists():
+                    return persisted
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1452,10 +1191,19 @@ def model_selector(key_prefix: str, label: str = "模型权重", allow_upload: b
             help="支持拖入 best.pt / last.pt。上传后会保存到项目的 .streamlit_uploads/models 目录。",
         )
         if uploaded is not None:
-            uploaded_path = save_uploaded_file(uploaded, "models")
-            ui_path_chip(uploaded_path, "已上传模型权重")
-            st.session_state[f"{key_prefix}_last_mdl"] = uploaded_path
-            return uploaded_path
+            import hashlib as _hashlib
+            mdl_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
+            if st.session_state.get(f"{key_prefix}_mdl_processed") != mdl_fp:
+                st.session_state[f"{key_prefix}_mdl_processed"] = mdl_fp
+                uploaded_path = save_uploaded_file(uploaded, "models")
+                ui_path_chip(uploaded_path, "已上传模型权重")
+                load_model_cached.clear()
+                st.session_state[f"{key_prefix}_last_mdl"] = uploaded_path
+                return uploaded_path
+            else:
+                persisted = st.session_state.get(f"{key_prefix}_last_mdl", "")
+                if persisted and Path(persisted).exists():
+                    return persisted
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -1487,9 +1235,19 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
         help="支持拖入模型结构 YAML，例如 yolo11-mobilenetv3-slimneck-p2.yaml。",
     )
     if uploaded is not None:
-        uploaded_path = save_uploaded_file(uploaded, "model_configs")
-        ui_path_chip(uploaded_path, "已上传模型配置")
-        return uploaded_path
+        import hashlib as _hashlib
+        cfg_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
+        if st.session_state.get(f"{key_prefix}_cfg_processed") != cfg_fp:
+            st.session_state[f"{key_prefix}_cfg_processed"] = cfg_fp
+            uploaded_path = save_uploaded_file(uploaded, "model_configs")
+            ui_path_chip(uploaded_path, "已上传模型配置")
+            return uploaded_path
+        else:
+            # 用已保存的路径
+            for c in scan_model_configs():
+                if c["path"].endswith(Path(uploaded.name).name):
+                    return c["path"]
+            return ""
 
     configs = scan_model_configs()
     cfg_options = [c["label"] for c in configs]
@@ -1570,7 +1328,7 @@ def page_dataset():
         return
 
     ui_section("样本预览", "抽检图片和 YOLO 标注框是否对齐。", "PREVIEW")
-    source = st.radio("浏览来源", sources, horizontal=True)
+    source = st.radio("浏览来源", sources, horizontal=True, key="ds_browse_source")
     pool_map = {"训练集": train_images, "验证集": val_images, "测试集": test_images}
     pool = pool_map.get(source, train_images)
 
@@ -1578,12 +1336,17 @@ def page_dataset():
     per_page = 12
     total_pages = max(1, (len(pool) + per_page - 1) // per_page)
 
-    # 分页控制
+    # 分页控制 — key 包含数据集路径和来源，避免切换时页码越界
+    page_key = f"ds_page_{yaml_path}_{source}"
     col_page, col_info = st.columns([3, 1])
     with col_page:
+        cur_page = st.session_state.get(page_key, 1)
+        if cur_page > total_pages:
+            cur_page = 1
         page = st.select_slider(
             "翻页", options=list(range(1, total_pages + 1)),
-            key="ds_page",
+            value=min(cur_page, total_pages),
+            key=page_key,
         )
     with col_info:
         st.metric("当前页", f"{page}/{total_pages}")
@@ -1622,6 +1385,8 @@ def page_dataset():
 # ═══════════════════════════════════════════
 
 def page_training():
+    import signal as _signal
+
     ui_page_header(
         "训练管理",
         "配置数据集、模型结构和关键超参数，并直接启动 YOLO 训练任务。",
@@ -1629,6 +1394,84 @@ def page_training():
         ["YOLOv11", "MobileNetV3", "Slim-Neck", "P2 小目标"],
     )
 
+    # ── 训练运行中：展示实时日志 + 停止按钮 ──
+    train_running = st.session_state.get("_train_running", False)
+    if train_running:
+        log_path = st.session_state.get("_train_log_path", "")
+        train_pid = st.session_state.get("_train_pid", 0)
+        train_project = st.session_state.get("_train_project_name", "")
+
+        # 检查进程是否还活着
+        process_alive = False
+        if train_pid:
+            try:
+                os.kill(train_pid, 0)
+                process_alive = True
+            except (OSError, ProcessLookupError):
+                process_alive = False
+
+        if process_alive:
+            st.session_state["training_status"] = "训练中"
+            st.warning("训练进行中，可通过下方按钮停止。页面每 3 秒自动刷新。")
+
+            # 显示最新日志
+            if log_path and Path(log_path).exists():
+                with open(log_path) as f:
+                    log_content = f.read()
+                st.code(log_content[-2500:] or "(等待训练输出...)")
+
+            col_stop, col_info = st.columns([1, 3])
+            with col_stop:
+                if st.button("停止训练", type="primary", key="tr_stop_btn"):
+                    try:
+                        os.killpg(train_pid, _signal.SIGTERM)
+                    except OSError:
+                        pass
+                    import time as _t2
+                    _t2.sleep(2)
+                    try:
+                        os.killpg(train_pid, _signal.SIGKILL)
+                    except OSError:
+                        pass
+                    st.session_state["_train_running"] = False
+                    st.session_state["training_status"] = "已手动停止"
+                    st.session_state["_train_was_stopped"] = True
+                    st.rerun()
+            with col_info:
+                st.caption(f"PID: {train_pid} | 输出目录: {train_project}")
+
+            import time as _time
+            _time.sleep(3)
+            st.rerun()
+            return
+        else:
+            # 进程已结束
+            st.session_state["_train_running"] = False
+            result_dir = SCRIPT_DIR / "runs" / "detect" / train_project
+            args_file_path = st.session_state.pop("_train_args_file", "")
+            if args_file_path and Path(args_file_path).exists():
+                try:
+                    Path(args_file_path).unlink()
+                except OSError:
+                    pass
+
+            if st.session_state.pop("_train_was_stopped", False):
+                st.session_state["training_status"] = "已手动停止"
+                st.warning("训练已被用户手动停止")
+            else:
+                st.session_state["training_status"] = "训练完成"
+                st.session_state["last_train_dir"] = str(result_dir)
+                st.session_state["_training_just_finished"] = True
+                st.success(f"训练完成！结果保存在 {result_dir}")
+                scan_models.clear()
+                results_img = result_dir / "results.png"
+                if results_img.exists():
+                    ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
+                    st.image(str(results_img), caption="训练曲线", use_container_width=True)
+            st.rerun()
+            return
+
+    # ── 正常配置表单 ──
     # 数据集选择
     ui_section("训练输入", "先确定数据集和模型结构，下面的训练命令会沿用这些路径。", "SETUP")
     yaml_path = dataset_selector("tr", "训练数据集")
@@ -1680,6 +1523,14 @@ def page_training():
     )
     device = device_labels[selected_device]
 
+    # 验证设备选择
+    if selected_device != "CPU":
+        gpu_id = int(device)
+        if gpu_id >= device_info["cuda_count"]:
+            st.error(f"GPU {gpu_id} 不存在（共 {device_info['cuda_count']} 个 GPU），请选择可用设备。")
+            if not st.session_state.get("training_status"):
+                st.session_state["training_status"] = "配置错误"
+
     d1, d2, d3, d4 = st.columns(4)
     d1.metric("Torch", "可用" if device_info["torch_available"] else "不可用")
     d2.metric("CUDA", "可用" if device_info["cuda_available"] else "不可用")
@@ -1692,13 +1543,13 @@ def page_training():
     elif not device_info["cuda_available"]:
         st.warning("当前环境未检测到 CUDA，但选择了 GPU。请检查 PyTorch/CUDA 环境。")
 
-    ui_section("执行", "启动后会在页面内持续刷新最近训练日志。", "RUN")
+    ui_section("执行", "启动后训练在后台运行，可随时停止。", "RUN")
     training_state = st.session_state.get("training_status", "未启动")
     status_cols = st.columns(4)
     status_cols[0].metric("训练状态", training_state)
     status_cols[1].metric("设备参数", device)
     status_cols[2].metric("输出目录", project_name)
-    status_cols[3].metric("日志窗口", "最近 35 行")
+    status_cols[3].metric("日志窗口", "最近 2500 字符")
 
     if st.button("开始训练", type="primary", use_container_width=True):
         if not yaml_path or not Path(yaml_path).exists():
@@ -1726,7 +1577,6 @@ def page_training():
             "patience": patience,
             "script_dir": str(SCRIPT_DIR),
         }
-        # 写参数到 JSON 文件，避免命令注入
         args_file = _tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, dir=str(SCRIPT_DIR))
         args_file.write(_json.dumps(train_args))
         args_file.close()
@@ -1747,36 +1597,23 @@ def page_training():
             args_file.name,
         ]
 
+        log_path = str(SCRIPT_DIR / "training.log")
+        log_file = open(log_path, "w")
+        process = subprocess.Popen(
+            cmd, stdout=log_file, stderr=subprocess.STDOUT,
+            text=True, cwd=str(SCRIPT_DIR),
+            start_new_session=True,
+        )
+        log_file.close()
+
+        st.session_state["_train_running"] = True
+        st.session_state["_train_pid"] = process.pid
+        st.session_state["_train_log_path"] = log_path
+        st.session_state["_train_project_name"] = project_name
+        st.session_state["_train_args_file"] = args_file.name
+        st.session_state["_train_was_stopped"] = False
         st.session_state["training_status"] = f"训练中 ({selected_device})"
-        st.info("训练已启动，日志实时显示中...")
-        log_placeholder = st.empty()
-        output_lines = []
-
-        with st.spinner("训练中..."):
-            process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, cwd=str(SCRIPT_DIR),
-            )
-            for line in process.stdout:
-                output_lines.append(line)
-                log_placeholder.code("".join(output_lines[-35:]))
-            process.wait()
-
-        if process.returncode == 0:
-            st.session_state["training_status"] = "训练完成"
-            result_dir = SCRIPT_DIR / "runs" / "detect" / project_name
-            st.session_state["last_train_dir"] = str(result_dir)
-            st.session_state["_training_just_finished"] = True
-            st.success(f"训练完成！结果保存在 {result_dir}")
-            # 清除模型缓存以便下次扫描到新模型
-            scan_models.clear()
-            results_img = result_dir / "results.png"
-            if results_img.exists():
-                ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
-                st.image(str(results_img), caption="训练曲线", use_container_width=True)
-        else:
-            st.session_state["training_status"] = "训练失败"
-            st.error("训练异常退出")
+        st.rerun()
 
     # 显示最近训练结果（非本次训练）
     last_dir = st.session_state.get("last_train_dir")
@@ -1813,7 +1650,8 @@ def page_inference():
         return
 
     try:
-        model = load_model_cached(model_path)
+        mtime = os.path.getmtime(model_path)
+        model = load_model_cached(model_path, mtime)
     except Exception as e:
         st.error(f"模型加载失败: {e}")
         return
@@ -1822,8 +1660,17 @@ def page_inference():
 
     # 推理模式
     ui_section("推理设置", "选择推理来源并设置最低置信度。", "CONTROL")
-    mode = st.radio("推理模式", ["单张/多张上传", "测试集目录"], horizontal=True)
-    conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.25, 0.05)
+    mode = st.radio("推理模式", ["单张/多张上传", "测试集目录"], horizontal=True, key="inf_mode")
+    conf_threshold = st.slider("置信度阈值", 0.0, 1.0, 0.25, 0.05, key="inf_conf")
+
+    # 输入变化检测：模型路径 + 模式 + 阈值改变时清除旧结果
+    inf_sig = f"{model_path}:{mode}:{conf_threshold}"
+    if st.session_state.get("inf_sig") != inf_sig:
+        st.session_state.pop("inf_has_results", None)
+        st.session_state.pop("inf_results", None)
+        st.session_state.pop("inf_batch_has", None)
+        st.session_state.pop("inf_batch", None)
+        st.session_state["inf_sig"] = inf_sig
 
     if mode == "单张/多张上传":
         uploaded_files = st.file_uploader(
@@ -1867,8 +1714,25 @@ def page_inference():
             for i, r in enumerate(results_list):
                 cols[i % 3].image(r["img"], caption=r["caption"], use_container_width=True)
 
+            # 导出推理结果
+            ui_section("导出结果", "打包所有检测结果图片。", "EXPORT")
+            import io as _io
+            import zipfile as _zipfile
+            buf = _io.BytesIO()
+            with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as zf:
+                for i, r in enumerate(results_list):
+                    import cv2 as _cv2
+                    img_bytes = _cv2.imencode(".jpg", _cv2.cvtColor(r["img"], _cv2.COLOR_RGB2BGR))[1].tobytes()
+                    zf.writestr(f"result_{i+1:03d}.jpg", img_bytes)
+            buf.seek(0)
+            st.download_button(
+                label="下载检测结果 (ZIP)", data=buf,
+                file_name=f"inference_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                mime="application/zip",
+            )
+
     else:
-        # 测试集目录模式
+        # 测试集目录模式 — 分块处理以支持中途取消
         ui_section("测试集目录", "从数据集配置自动取 test/val，或手动指定图片目录。", "DATA")
 
         datasets = scan_datasets()
@@ -1885,7 +1749,6 @@ def page_inference():
                 if d["label"] == selected_ds:
                     data_info = parse_data_yaml(d["path"])
                     if data_info:
-                        # 优先 test，其次 val
                         test_dir = data_info.get("test") or data_info.get("val", "")
                         ui_path_chip(d["path"], "数据集配置")
                     break
@@ -1907,33 +1770,52 @@ def page_inference():
 
         max_display = st.slider("最多显示结果图", 4, 24, 8, 4, key="inf_max_display")
 
-        if st.button("批量推理", type="primary", use_container_width=True):
-            import cv2
-            import numpy as np
+        # 分块推理状态
+        CHUNK_SIZE = 20
+        batch_running = st.session_state.get("_inf_batch_running", False)
+        batch_cancelled = st.session_state.get("_inf_batch_cancel", False)
 
-            total_fire = 0
-            total_smoke = 0
-            all_confs = []
-            results_display = []
-
+        if batch_running:
             progress_bar = st.progress(0)
             status_text = st.empty()
+            stop_col, _ = st.columns([1, 3])
+            with stop_col:
+                if st.button("停止批量推理", type="primary", key="inf_stop_btn"):
+                    st.session_state["_inf_batch_cancel"] = True
+                    st.rerun()
 
-            for idx, img_path in enumerate(test_images):
+            chunk_start = st.session_state.get("_inf_batch_idx", 0)
+            if batch_cancelled:
+                progress_bar.empty()
+                status_text.empty()
+                st.session_state["_inf_batch_running"] = False
+                st.session_state["_inf_batch_cancel"] = False
+                st.warning("批量推理已取消")
+                st.rerun()
+
+            import cv2
+            import numpy as np
+            total_fire = st.session_state.get("_inf_batch_fire", 0)
+            total_smoke = st.session_state.get("_inf_batch_smoke", 0)
+            all_confs = st.session_state.get("_inf_batch_confs", [])
+            results_display = st.session_state.get("_inf_batch_display", [])
+
+            chunk_end = min(chunk_start + CHUNK_SIZE, len(test_images))
+            for idx in range(chunk_start, chunk_end):
+                if st.session_state.get("_inf_batch_cancel"):
+                    break
+                img_path = test_images[idx]
                 img = cv2.imread(img_path)
                 if img is None:
                     continue
                 results = model.predict(img, conf=conf_threshold, verbose=False)
                 boxes = results[0].boxes
-
                 if boxes is not None and len(boxes) > 0:
                     cls_ids = boxes.cls.cpu().numpy().astype(int)
                     confs = boxes.conf.cpu().numpy()
                     total_fire += int((cls_ids == 0).sum())
                     total_smoke += int((cls_ids == 1).sum())
                     all_confs.extend(confs.tolist())
-
-                # 保存部分结果用于展示
                 if len(results_display) < max_display:
                     result_img = results[0].plot()
                     result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
@@ -1944,26 +1826,46 @@ def page_inference():
                         "smoke": int((cls_ids == 1).sum()) if boxes is not None and len(boxes) > 0 else 0,
                         "has_boxes": boxes is not None and len(boxes) > 0,
                     })
-
                 progress_bar.progress((idx + 1) / len(test_images))
                 status_text.text(f"处理中: {idx + 1}/{len(test_images)} — {Path(img_path).name}")
 
-            progress_bar.empty()
-            status_text.empty()
+            if st.session_state.get("_inf_batch_cancel") or chunk_end >= len(test_images):
+                progress_bar.empty()
+                status_text.empty()
+                st.session_state["_inf_batch_running"] = False
+                st.session_state["_inf_batch_cancel"] = False
+                st.session_state["inf_batch"] = {
+                    "total_images": len(test_images),
+                    "total_fire": total_fire,
+                    "total_smoke": total_smoke,
+                    "avg_conf": np.mean(all_confs) if all_confs else 0,
+                    "display": results_display,
+                }
+                st.session_state["inf_batch_has"] = True
+                st.rerun()
+            else:
+                st.session_state["_inf_batch_idx"] = chunk_end
+                st.session_state["_inf_batch_fire"] = total_fire
+                st.session_state["_inf_batch_smoke"] = total_smoke
+                st.session_state["_inf_batch_confs"] = all_confs
+                st.session_state["_inf_batch_display"] = results_display
+                import time as _time
+                _time.sleep(0.5)
+                st.rerun()
 
-            st.session_state["inf_batch"] = {
-                "total_images": len(test_images),
-                "total_fire": total_fire,
-                "total_smoke": total_smoke,
-                "avg_conf": np.mean(all_confs) if all_confs else 0,
-                "display": results_display,
-            }
-            st.session_state["inf_batch_has"] = True
+        elif st.button("批量推理", type="primary", use_container_width=True):
+            st.session_state["_inf_batch_running"] = True
+            st.session_state["_inf_batch_cancel"] = False
+            st.session_state["_inf_batch_idx"] = 0
+            st.session_state["_inf_batch_fire"] = 0
+            st.session_state["_inf_batch_smoke"] = 0
+            st.session_state["_inf_batch_confs"] = []
+            st.session_state["_inf_batch_display"] = []
+            st.rerun()
 
         if st.session_state.get("inf_batch_has"):
             import numpy as np
             batch = st.session_state["inf_batch"]
-            # 汇总
             ui_section("推理汇总", "批量目录的目标计数和平均置信度。", "SUMMARY")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("测试图片数", batch["total_images"])
@@ -1971,7 +1873,6 @@ def page_inference():
             c3.metric("检测烟雾总数", batch["total_smoke"])
             c4.metric("平均置信度", f"{batch['avg_conf']:.3f}" if batch["avg_conf"] else "—")
 
-            # 展示部分结果
             results_display = batch["display"]
             if results_display:
                 ui_section("部分检测结果", f"展示前 {len(results_display)} 张结果图。", "GALLERY")
@@ -1981,6 +1882,28 @@ def page_inference():
                     cap = f"{r['name']} | 火焰 {r['fire']} | 烟雾 {r['smoke']}" if r["has_boxes"] else f"{r['name']} | 无检测"
                     col.image(r["img"], caption=cap, use_container_width=True)
 
+            # 导出汇总 JSON
+            ui_section("导出结果", "下载推理汇总数据和结果图片。", "EXPORT")
+            import json as _json
+            import io as _io
+            summary = {
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "model": model_path,
+                "test_dir": test_dir,
+                "total_images": batch["total_images"],
+                "total_fire": batch["total_fire"],
+                "total_smoke": batch["total_smoke"],
+                "avg_confidence": round(float(batch["avg_conf"]), 4),
+            }
+            json_buf = _io.BytesIO()
+            json_buf.write(_json.dumps(summary, indent=2, ensure_ascii=False).encode("utf-8"))
+            json_buf.seek(0)
+            st.download_button(
+                label="下载推理汇总 (JSON)", data=json_buf,
+                file_name=f"inference_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+            )
+
 
 # ═══════════════════════════════════════════
 # 页面 4：模型评估
@@ -1989,39 +1912,36 @@ def page_inference():
 def _get_model_info(model_path: str) -> dict:
     """获取模型的参数量和 FLOPs"""
     import torch
-    import io
-
     from ultralytics import YOLO
-    model = YOLO(model_path)
-    old_stdout = sys.stdout
-    sys.stdout = io.StringIO()
-    model.info()
-    info_str = sys.stdout.getvalue()
-    sys.stdout = old_stdout
 
-    params_m = 0.0
+    model = YOLO(model_path)
+    total = sum(p.numel() for p in model.model.parameters())
+    params_m = total / 1e6
+
     flops_g = 0.0
-    for line in info_str.split("\n"):
-        if "GFLOPs" in line:
-            flops_g = float(line.split()[0])
-        if "parameters" in line:
-            params_m = float(line.split()[0])
-    if params_m == 0:
-        total = sum(p.numel() for p in model.model.parameters())
-        params_m = total / 1e6
-        flops_g = params_m * 640 * 640 / 100000
+    try:
+        from thop import profile
+        dummy = torch.randn(1, 3, 640, 640)
+        flops, _ = profile(model.model, inputs=(dummy,), verbose=False)
+        flops_g = flops / 1e9
+    except Exception:
+        pass
+
     return {"params_m": params_m, "flops_g": flops_g}
 
 
 def _run_eval(model_path: str, data_yaml: str):
     """运行评估，返回指标字典"""
-    model = load_model_cached(model_path)
+    mtime = os.path.getmtime(model_path)
+    model = load_model_cached(model_path, mtime)
     metrics = model.val(data=data_yaml, verbose=False)
+    save_dir = getattr(metrics, "save_dir", None)
     return {
         "map50": metrics.box.map50,
         "map50_95": metrics.box.map,
         "precision": metrics.box.mp if hasattr(metrics.box, "mp") else 0.0,
         "recall": metrics.box.mr if hasattr(metrics.box, "mr") else 0.0,
+        "save_dir": str(save_dir) if save_dir else "",
     }
 
 
@@ -2079,9 +1999,9 @@ def page_evaluation():
             c1.metric("参数量", f"{model_info['params_m']:.1f} M")
             c2.metric("计算量", f"{model_info['flops_g']:.1f} GFLOPs")
 
-            # 评估图表
-            val_dirs = sorted((SCRIPT_DIR / "runs" / "detect").glob("*val*"), key=os.path.getmtime, reverse=True)
-            val_dir = val_dirs[0] if val_dirs else None
+            # 评估图表 — 使用本次评估的 save_dir
+            save_dir_str = eval_result.get("save_dir", "")
+            val_dir = Path(save_dir_str) if save_dir_str and Path(save_dir_str).exists() else None
             if val_dir:
                 ui_section("评估图表", "Ultralytics 验证流程输出的可视化结果。", "PLOTS")
                 plot_files = sorted(val_dir.glob("*.png"))
@@ -2283,6 +2203,7 @@ def page_evaluation():
 
                 fig.tight_layout()
                 st.pyplot(fig)
+                plt.close(fig)
 
                 # 导出对比结果
                 ui_section("导出对比", "生成包含全部模型对比指标的汇总图片。", "EXPORT")
@@ -2412,18 +2333,36 @@ HARDWARE_PROFILES = {
 
 
 def estimate_memory(params_m: float, imgsz: int, batch: int, fp16: bool = False) -> dict:
-    """估算显存占用"""
+    """估算显存占用
+
+    基于 MobileNetV3 + Slim-Neck YOLO 检测器架构的经验公式。
+    基准：640×640、batch=1、FP16 时激活约 250 MB。
+    训练额外计入：梯度(FP32) + Adam 优化器状态(m+v, FP32) + 反向传播中间激活 + 工作区。
+    """
     bytes_per_param = 2 if fp16 else 4
-    model_mem_mb = params_m * bytes_per_param * 1.2  # 含 overhead
+    scale = (imgsz / 640) ** 2
 
-    # 激活内存粗略估算
-    activation_mb = batch * (imgsz ** 2) * 3 * bytes_per_param * 0.004
+    # 模型权重及其运行时结构开销
+    model_mb = params_m * bytes_per_param * 1.3
 
-    inference_mb = model_mem_mb + activation_mb
-    training_mb = model_mem_mb * 3 + activation_mb * 2  # 梯度 + 优化器
+    # 中间激活：按输入面积和 batch 线性缩放
+    base_activation_mb = 250 if fp16 else 500
+    activation_mb = batch * scale * base_activation_mb
+
+    # CUDA 运行时固定开销（驱动、context、cuDNN workspace、PyTorch 缓存分配器）
+    cuda_overhead_mb = 250
+
+    inference_mb = model_mb + activation_mb + cuda_overhead_mb
+
+    # 训练额外显存
+    grad_opt_mb = params_m * 4 * 3 * 1.1          # 梯度(FP32) + Adam m(FP32) + Adam v(FP32)
+    extra_activation_mb = activation_mb * 1.5      # 反向传播需额外存储的中间值
+    train_workspace_mb = 200                        # 训练专有工作区
+
+    training_mb = inference_mb + grad_opt_mb + extra_activation_mb + train_workspace_mb
 
     return {
-        "model_mb": round(model_mem_mb, 1),
+        "model_mb": round(model_mb, 1),
         "activation_mb": round(activation_mb, 1),
         "inference_mb": round(inference_mb, 1),
         "training_mb": round(training_mb, 1),
@@ -2445,15 +2384,12 @@ def page_hardware():
     )
 
     ui_section("模型来源", "可以用 YAML 结构配置，也可以直接读取已训练权重。", "TARGET")
-    tab1, tab2 = st.tabs(["从模型配置预估", "从已训练模型预估"])
+    source_mode = st.radio("选择来源", ["从模型配置预估", "从已训练模型预估"], horizontal=True, key="hw_source")
 
-    with tab1:
-        config_target = model_config_selector("hw", "选择模型配置")
-
-    with tab2:
-        model_target = model_selector("hw", "已训练模型")
-
-    target = model_target or config_target
+    if source_mode == "从模型配置预估":
+        target = model_config_selector("hw", "选择模型配置")
+    else:
+        target = model_selector("hw", "已训练模型")
 
     if not target or not Path(target).exists():
         st.info("请选择模型配置或已训练模型文件")
@@ -2468,37 +2404,33 @@ def page_hardware():
     fp16_mode = col3.checkbox("FP16 模式", value=False, key="hw_fp16",
                                help="开启后半精度，显存需求约减半")
 
+    # 签名跟踪：目标文件 mtime + 参数，检测变化时清除旧结果
+    try:
+        cur_sig = f"{target}:{os.path.getmtime(target)}:{imgsz}:{batch}:{fp16_mode}"
+    except OSError:
+        cur_sig = ""
+    if st.session_state.get("hw_sig") != cur_sig:
+        st.session_state["hw_has_result"] = False
+        st.session_state["hw_sig"] = cur_sig
+
     if st.button("开始预估", type="primary", use_container_width=True):
         with st.spinner("正在分析模型..."):
             import torch
-            import io
+            from ultralytics import YOLO
 
             try:
-                # 构建模型并获取信息
-                from ultralytics import YOLO
-
-                # 捕获 model.info() 输出
                 model = YOLO(target)
-                old_stdout = sys.stdout
-                sys.stdout = io.StringIO()
-                model.info()
-                info_str = sys.stdout.getvalue()
-                sys.stdout = old_stdout
+                total = sum(p.numel() for p in model.model.parameters())
+                params_m = total / 1e6
 
-                # 解析 FLOPs 和 Params
-                params_m = 0.0
                 flops_g = 0.0
-                for line in info_str.split("\n"):
-                    if "GFLOPs" in line:
-                        flops_g = float(line.split()[0])
-                    if "parameters" in line:
-                        params_m = float(line.split()[0])
-
-                if params_m == 0 and flops_g == 0:
-                    # 回退到 torch 直接统计
-                    total = sum(p.numel() for p in model.model.parameters())
-                    params_m = total / 1e6
-                    flops_g = params_m * imgsz * imgsz / 100000
+                try:
+                    from thop import profile
+                    dummy = torch.randn(1, 3, imgsz, imgsz)
+                    flops, _ = profile(model.model, inputs=(dummy,), verbose=False)
+                    flops_g = flops / 1e9
+                except Exception:
+                    pass
 
                 memory = estimate_memory(params_m, imgsz, batch, fp16_mode)
 
@@ -2506,8 +2438,11 @@ def page_hardware():
                 st.session_state["hw_flops_g"] = flops_g
                 st.session_state["hw_memory"] = memory
                 st.session_state["hw_saved_imgsz"] = imgsz
+                st.session_state["hw_saved_batch"] = batch
                 st.session_state["hw_saved_fp16"] = fp16_mode
+                st.session_state["hw_target"] = target
                 st.session_state["hw_has_result"] = True
+                st.session_state["hw_sig"] = cur_sig
 
             except Exception as e:
                 st.error(f"模型分析失败: {e}")
@@ -2518,7 +2453,9 @@ def page_hardware():
         flops_g = st.session_state["hw_flops_g"]
         memory = st.session_state["hw_memory"]
         imgsz = st.session_state["hw_saved_imgsz"]
+        batch = st.session_state.get("hw_saved_batch", 1)
         fp16_mode = st.session_state["hw_saved_fp16"]
+        target = st.session_state.get("hw_target", "")
 
         # 展示预估结果
         ui_section("模型复杂度", "从 Ultralytics 模型信息解析出的参数量和 GFLOPs。", "MODEL")
@@ -2556,6 +2493,30 @@ def page_hardware():
         import pandas as pd
         df = pd.DataFrame(rows)
         st.dataframe(df, use_container_width=True, hide_index=True)
+
+        # 导出硬件预估报告
+        ui_section("导出报告", "将预估结果导出为 JSON 文件。", "EXPORT")
+        import json as _json
+        import io as _io
+        report = {
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "target": target,
+            "params_m": round(params_m, 2),
+            "flops_g": round(flops_g, 2),
+            "imgsz": imgsz,
+            "batch": batch,
+            "fp16": fp16_mode,
+            "memory": memory,
+            "compatibility": rows,
+        }
+        buf = _io.BytesIO()
+        buf.write(_json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8"))
+        buf.seek(0)
+        st.download_button(
+            label="下载硬件预估报告 (JSON)", data=buf,
+            file_name=f"hardware_est_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+        )
 
 
 # ═══════════════════════════════════════════
@@ -2635,19 +2596,23 @@ def page_optimization():
     ui_section("执行", "导出产物会写入 Ultralytics 返回的模型路径。", "EXPORT")
 
     if st.button("执行优化", type="primary", use_container_width=True):
+        import shutil as _shutil
         results = []
         export_dir = SCRIPT_DIR / "runs" / "optimize"
         export_dir.mkdir(parents=True, exist_ok=True)
         model_name = Path(target_model).stem
 
-        model = load_model_cached(target_model)
+        mtime = os.path.getmtime(target_model)
+        model = load_model_cached(target_model, mtime)
 
         if export_fp16:
             with st.spinner("导出 FP16 ONNX..."):
                 try:
                     out = model.export(format="onnx", half=True, imgsz=reduced_imgsz)
-                    out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("FP16 ONNX", str(out), out_size, "通用硬件，半精度"))
+                    dest = export_dir / f"{model_name}_fp16_{reduced_imgsz}.onnx"
+                    _shutil.copy2(out, dest)
+                    out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
+                    results.append(("FP16 ONNX", str(dest), out_size, "通用硬件，半精度"))
                 except Exception as e:
                     st.error(f"FP16 导出失败: {e}")
 
@@ -2655,8 +2620,10 @@ def page_optimization():
             with st.spinner("导出 FP32 ONNX..."):
                 try:
                     out = model.export(format="onnx", half=False, imgsz=reduced_imgsz)
-                    out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("FP32 ONNX", str(out), out_size, "通用跨平台部署"))
+                    dest = export_dir / f"{model_name}_fp32_{reduced_imgsz}.onnx"
+                    _shutil.copy2(out, dest)
+                    out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
+                    results.append(("FP32 ONNX", str(dest), out_size, "通用跨平台部署"))
                 except Exception as e:
                     st.error(f"ONNX 导出失败: {e}")
 
@@ -2664,14 +2631,18 @@ def page_optimization():
             with st.spinner("导出 INT8 TFLite（需较长时间）..."):
                 try:
                     out = model.export(format="tflite", int8=True, imgsz=reduced_imgsz)
-                    out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                    results.append(("INT8 TFLite", str(out), out_size, "边缘设备，极致压缩"))
+                    dest = export_dir / f"{model_name}_int8_{reduced_imgsz}.tflite"
+                    _shutil.copy2(out, dest)
+                    out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
+                    results.append(("INT8 TFLite", str(dest), out_size, "边缘设备，极致压缩"))
                 except Exception as e:
                     st.error(f"INT8 导出失败: {e}。可能需要代表性数据集校准，尝试无量化导出...")
                     try:
                         out = model.export(format="tflite", imgsz=reduced_imgsz)
-                        out_size = round(os.path.getsize(out) / 1024 / 1024, 1)
-                        results.append(("FP32 TFLite", str(out), out_size, "边缘设备备用"))
+                        dest = export_dir / f"{model_name}_fp32_{reduced_imgsz}.tflite"
+                        _shutil.copy2(out, dest)
+                        out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
+                        results.append(("FP32 TFLite", str(dest), out_size, "边缘设备备用"))
                     except Exception as e2:
                         st.error(f"TFLite 导出也失败: {e2}")
 
@@ -2690,6 +2661,26 @@ def page_optimization():
             c2.metric("大小", f"{size} MB", f"{(1 - size/model_size_mb)*100:.0f}%" if model_size_mb else "")
             c3.caption(desc)
 
+        # 导出优化汇总
+        ui_section("导出优化报告", "将优化结果导出为 JSON 汇总。", "EXPORT")
+        import json as _json
+        import io as _io
+        report = {
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source_model": target_model,
+            "original_size_mb": model_size_mb,
+            "target_hardware": target_hw,
+            "results": [{"format": r[0], "path": r[1], "size_mb": r[2]} for r in results],
+        }
+        buf = _io.BytesIO()
+        buf.write(_json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8"))
+        buf.seek(0)
+        st.download_button(
+            label="下载优化报告 (JSON)", data=buf,
+            file_name=f"optimization_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+        )
+
 
 # ═══════════════════════════════════════════
 # 主入口
@@ -2697,19 +2688,29 @@ def page_optimization():
 
 def _cleanup_old_files():
     """清理过期文件，防止无限累积"""
-    # eval_results: 保留最近 10 个
-    for sub in ["eval_results"]:
-        d = SCRIPT_DIR / sub
-        if d.exists():
-            files = sorted(d.glob("*"), key=os.path.getmtime, reverse=True)
-            for f in files[10:]:
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
-    # 上传目录: 清理 7 天前的文件
     import time as _time
     import shutil as _shutil
+
+    # eval_results: 保留最近 10 个
+    d = SCRIPT_DIR / "eval_results"
+    if d.exists():
+        files = sorted(d.glob("*"), key=os.path.getmtime, reverse=True)
+        for f in files[10:]:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+    # training.log: 超过 7 天删除
+    log_path = SCRIPT_DIR / "training.log"
+    if log_path.exists():
+        if _time.time() - os.path.getmtime(log_path) > 7 * 86400:
+            try:
+                log_path.unlink()
+            except OSError:
+                pass
+
+    # 上传目录: 清理 7 天前的文件
     for subdir in ["models", "datasets", "model_configs", "datasets_extracted"]:
         d = UPLOAD_DIR / subdir
         if d.exists():
@@ -2723,6 +2724,38 @@ def _cleanup_old_files():
                             f.unlink()
                     except OSError:
                         pass
+
+    # runs/detect: 保留最近 5 次训练结果，删除其余
+    runs_dir = SCRIPT_DIR / "runs" / "detect"
+    if runs_dir.exists():
+        subdirs = sorted(runs_dir.iterdir(), key=os.path.getmtime, reverse=True)
+        for sd in subdirs[5:]:
+            if sd.is_dir():
+                try:
+                    _shutil.rmtree(sd)
+                except OSError:
+                    pass
+
+    # runs/optimize: 清理 7 天前的导出文件
+    opt_dir = SCRIPT_DIR / "runs" / "optimize"
+    if opt_dir.exists():
+        cutoff = _time.time() - 7 * 86400
+        for f in opt_dir.iterdir():
+            if os.path.getmtime(f) < cutoff:
+                try:
+                    if f.is_dir():
+                        _shutil.rmtree(f)
+                    else:
+                        f.unlink()
+                except OSError:
+                    pass
+
+    # 清理滞留的临时 args JSON 文件
+    for tf in SCRIPT_DIR.glob("tmp*.json"):
+        try:
+            tf.unlink()
+        except OSError:
+            pass
 
 
 def main():
@@ -2771,11 +2804,18 @@ def main():
     )
 
     # 刷新缓存按钮
-    if st.sidebar.button("刷新资源列表"):
-        scan_datasets.clear()
-        scan_models.clear()
-        scan_model_configs.clear()
-        st.rerun()
+    col_btn1, col_btn2 = st.sidebar.columns(2)
+    with col_btn1:
+        if st.button("刷新资源列表", use_container_width=True):
+            scan_datasets.clear()
+            scan_models.clear()
+            scan_model_configs.clear()
+            st.rerun()
+    with col_btn2:
+        if st.button("清理模型缓存", use_container_width=True,
+                     help="从内存中卸载已缓存的 YOLO 模型，释放显存"):
+            load_model_cached.clear()
+            st.rerun()
 
     if page == "数据集浏览":
         page_dataset()
