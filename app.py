@@ -1232,6 +1232,31 @@ def load_model_cached(model_path: str):
     return YOLO(model_path)
 
 
+@st.cache_data(ttl=10, show_spinner=False)
+def get_compute_devices() -> dict:
+    """检测当前 Python 环境可用的训练设备。"""
+    info = {
+        "torch_available": False,
+        "cuda_available": False,
+        "cuda_count": 0,
+        "gpus": [],
+        "error": "",
+    }
+    try:
+        import torch
+        info["torch_available"] = True
+        info["cuda_available"] = bool(torch.cuda.is_available())
+        info["cuda_count"] = int(torch.cuda.device_count()) if info["cuda_available"] else 0
+        for idx in range(info["cuda_count"]):
+            info["gpus"].append({
+                "id": idx,
+                "name": torch.cuda.get_device_name(idx),
+            })
+    except Exception as e:
+        info["error"] = str(e)
+    return info
+
+
 # ═══════════════════════════════════════════
 # 通用组件：数据集选择器
 # ═══════════════════════════════════════════
@@ -1488,20 +1513,58 @@ def page_training():
     imgsz = c3.number_input("Image Size", 320, 1280, 640, 32)
     lr0 = c4.number_input("Learning Rate", 0.0001, 0.1, 0.01, format="%.4f")
 
-    c5, c6, c7, c8 = st.columns(4)
-    device = c5.selectbox("Device", ["0", "cpu"], index=0)
-    close_mosaic = c6.number_input("Close Mosaic", 0, 50, 20, 5, help="在第 N 个 epoch 关闭 mosaic")
-    patience = c7.number_input("Patience (早停)", 10, 200, 50, 10, help="连续 N 个 epoch 无提升则自动停止")
-    project_name = c8.text_input("输出目录名", value="fire_mobilenet_slimneck")
+    c5, c6, c7 = st.columns(3)
+    close_mosaic = c5.number_input("Close Mosaic", 0, 50, 20, 5, help="在第 N 个 epoch 关闭 mosaic")
+    patience = c6.number_input("Patience (早停)", 10, 200, 50, 10, help="连续 N 个 epoch 无提升则自动停止")
+    project_name = c7.text_input("输出目录名", value="fire_mobilenet_slimneck")
+
+    ui_section("训练设备", "检查当前环境是否有 GPU，并手动选择本次训练使用 CPU 还是 GPU。", "DEVICE")
+    device_info = get_compute_devices()
+    device_options = ["CPU"]
+    device_labels = {"CPU": "cpu"}
+    for gpu in device_info["gpus"]:
+        option = f"GPU {gpu['id']}: {gpu['name']}"
+        device_options.append(option)
+        device_labels[option] = str(gpu["id"])
+
+    default_device_idx = 1 if len(device_options) > 1 else 0
+    selected_device = st.radio(
+        "训练设备",
+        device_options,
+        index=default_device_idx,
+        horizontal=True,
+        key="tr_device_choice",
+    )
+    device = device_labels[selected_device]
+
+    d1, d2, d3, d4 = st.columns(4)
+    d1.metric("Torch", "可用" if device_info["torch_available"] else "不可用")
+    d2.metric("CUDA", "可用" if device_info["cuda_available"] else "不可用")
+    d3.metric("GPU 数量", device_info["cuda_count"])
+    d4.metric("本次训练", selected_device)
+    if device_info["error"]:
+        st.warning(f"设备检测失败: {device_info['error']}")
+    if selected_device == "CPU":
+        st.info("当前将使用 CPU 训练，速度通常明显慢于 GPU。")
+    elif not device_info["cuda_available"]:
+        st.warning("当前环境未检测到 CUDA，但选择了 GPU。请检查 PyTorch/CUDA 环境。")
 
     ui_section("执行", "启动后会在页面内持续刷新最近训练日志。", "RUN")
+    training_state = st.session_state.get("training_status", "未启动")
+    status_cols = st.columns(4)
+    status_cols[0].metric("训练状态", training_state)
+    status_cols[1].metric("设备参数", device)
+    status_cols[2].metric("输出目录", project_name)
+    status_cols[3].metric("日志窗口", "最近 35 行")
 
     if st.button("开始训练", type="primary", use_container_width=True):
         if not yaml_path or not Path(yaml_path).exists():
             st.error("请先选择有效的训练数据集")
+            st.session_state["training_status"] = "配置错误"
             return
         if not model_yaml or not Path(model_yaml).exists():
             st.error(f"模型配置文件不存在: {model_yaml}")
+            st.session_state["training_status"] = "配置错误"
             return
 
         cmd = [
@@ -1529,6 +1592,7 @@ model.train(
             """,
         ]
 
+        st.session_state["training_status"] = f"训练中 ({selected_device})"
         st.info("训练已启动，日志实时显示中...")
         log_placeholder = st.empty()
         output_lines = []
@@ -1544,6 +1608,7 @@ model.train(
             process.wait()
 
         if process.returncode == 0:
+            st.session_state["training_status"] = "训练完成"
             st.success(f"训练完成！结果保存在 runs/detect/{project_name}/")
             # 清除模型缓存以便下次扫描到新模型
             scan_models.clear()
@@ -1553,6 +1618,7 @@ model.train(
                 ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
                 st.image(str(results_img), caption="训练曲线", use_container_width=True)
         else:
+            st.session_state["training_status"] = "训练失败"
             st.error("训练异常退出")
 
     # 显示最近训练结果

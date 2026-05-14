@@ -6,6 +6,7 @@
 
 - 数据集浏览：扫描 `data.yaml`，统计训练/验证/测试图片数量，预览图片和 YOLO 标注框。
 - 训练管理：选择数据集和模型结构 YAML，配置 epoch、batch、imgsz、学习率等参数并启动训练。
+- 训练设备：自动检测 Torch/CUDA/GPU 数量，支持手动选择 CPU 或具体 GPU，并显示训练状态。
 - 模型推理：加载 `.pt` 权重，对上传图片或测试集目录执行检测。
 - 模型评估：支持单模型指标评估和 2-5 个模型横向对比。
 - 硬件预估：估算参数量、GFLOPs、推理/训练显存峰值，并给出常见硬件兼容性建议。
@@ -104,13 +105,23 @@ yolo11-mobilenetv3-slimneck-p2.yaml
 1. 选择或拖拽上传训练数据集 `data.yaml`。
 2. 选择或拖拽上传模型配置 YAML。
 3. 设置 `Epochs`、`Batch Size`、`Image Size`、`Learning Rate`、`Device` 等参数。
-4. 点击“开始训练”。
+4. 在“训练设备”区域查看 Torch/CUDA/GPU 状态，并选择 CPU 或具体 GPU。
+5. 在“执行”区域确认训练状态、设备参数、输出目录和日志窗口。
+6. 点击“开始训练”。
 
 训练结果默认输出到：
 
 ```text
 runs/detect/<输出目录名>/
 ```
+
+训练设备选择会传递给 Ultralytics 的 `device` 参数：
+
+- `CPU` -> `device="cpu"`
+- `GPU 0: ...` -> `device="0"`
+- `GPU 1: ...` -> `device="1"`
+
+如果界面显示 CUDA 不可用，请检查当前 Python 环境中的 PyTorch 是否支持 CUDA。
 
 也可以使用命令行训练：
 
