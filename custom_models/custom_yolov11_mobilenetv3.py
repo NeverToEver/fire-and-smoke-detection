@@ -46,7 +46,6 @@ class VoVGSCSP(nn.Module):
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv(c1, c_, 1, 1)
         self.gsb = nn.Sequential(*(GSBottleneck(c_, c_, e=1.0) for _ in range(n)))
-        self.res = Conv(c_, c_, 1, 1)
         self.cv3 = Conv(2 * c_, c2, 1)
 
     def forward(self, x):
