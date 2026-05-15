@@ -27,7 +27,7 @@ def page_training():
         train_pid = st.session_state.get("_train_pid", 0)
         train_project = st.session_state.get("_train_project_name", "")
 
-        # 检查进程是否还活着
+        # 检查进程是否还活着，并捕获退出码
         process_alive = False
         if train_pid:
             try:
@@ -35,6 +35,12 @@ def page_training():
                 process_alive = True
             except (OSError, ProcessLookupError):
                 process_alive = False
+                if "_train_exit_code" not in st.session_state:
+                    try:
+                        _, exit_status = os.waitpid(train_pid, os.WNOHANG)
+                        st.session_state["_train_exit_code"] = exit_status if exit_status != 0 else exit_status
+                    except OSError:
+                        st.session_state["_train_exit_code"] = -1
 
         if process_alive:
             st.session_state["training_status"] = "训练中"
@@ -81,9 +87,27 @@ def page_training():
                 except OSError:
                     pass
 
+            # 获取训练进程退出码
+            exit_code = st.session_state.get("_train_exit_code")
+            if exit_code is None:
+                try:
+                    exit_code = os.waitpid(train_pid, os.WNOHANG)[1]
+                except OSError:
+                    exit_code = -1
+
             if st.session_state.pop("_train_was_stopped", False):
                 st.session_state["training_status"] = "已手动停止"
                 st.warning("训练已被用户手动停止")
+            elif exit_code != 0:
+                st.session_state["training_status"] = f"训练异常退出 (code={exit_code})"
+                st.error(
+                    f"训练进程异常退出，退出码: {exit_code}。"
+                    "请检查日志排查是否为 OOM / 数据集路径错误 / 模型配置不兼容。"
+                )
+                if log_path and Path(log_path).exists():
+                    with open(log_path) as f:
+                        tail = "".join(f.readlines()[-20:])
+                    st.text_area("日志末尾", tail, height=200)
             else:
                 st.session_state["training_status"] = "训练完成"
                 st.session_state["last_train_dir"] = str(result_dir)
@@ -130,14 +154,22 @@ def page_training():
     patience = c6.number_input("Patience (早停)", 10, 200, 50, 10, help="连续 N 个 epoch 无提升则自动停止")
     project_name = c7.text_input("输出目录名", value="fire_mobilenet_slimneck")
 
-    ui_section("训练设备", "检查当前环境是否有 GPU，并手动选择本次训练使用 CPU 还是 GPU。", "DEVICE")
+    ui_section("训练设备", "检查当前环境是否有 GPU（CUDA / MPS），并手动选择本次训练使用的设备。", "DEVICE")
     device_info = get_compute_devices()
     device_options = ["CPU"]
     device_labels = {"CPU": "cpu"}
-    for gpu in device_info["gpus"]:
-        option = f"GPU {gpu['id']}: {gpu['name']}"
-        device_options.append(option)
-        device_labels[option] = str(gpu["id"])
+    for i, gpu_name in enumerate(device_info["gpus"]):
+        if device_info["mps_available"]:
+            option = f"MPS (Apple GPU)"
+            device_labels[option] = "mps"
+        elif device_info["cuda_available"]:
+            option = f"GPU {i}: {gpu_name}"
+            device_labels[option] = str(i)
+        else:
+            option = f"GPU: {gpu_name}"
+            device_labels[option] = "cuda"
+        if option not in device_options:
+            device_options.append(option)
 
     default_device_idx = 1 if len(device_options) > 1 else 0
     selected_device = st.radio(
@@ -149,25 +181,19 @@ def page_training():
     )
     device = device_labels[selected_device]
 
-    # 验证设备选择
-    if selected_device != "CPU":
-        gpu_id = int(device)
-        if gpu_id >= device_info["cuda_count"]:
-            st.error(f"GPU {gpu_id} 不存在（共 {device_info['cuda_count']} 个 GPU），请选择可用设备。")
-            if not st.session_state.get("training_status"):
-                st.session_state["training_status"] = "配置错误"
+    # 设备状态展示
+    gpu_type = "MPS" if device_info["mps_available"] else "CUDA" if device_info["cuda_available"] else "无"
+    gpu_label = "MPS (Metal)" if device_info["mps_available"] else f"{device_info['cuda_count']} 个"
 
     d1, d2, d3, d4 = st.columns(4)
     d1.metric("Torch", "可用" if device_info["torch_available"] else "不可用")
-    d2.metric("CUDA", "可用" if device_info["cuda_available"] else "不可用")
-    d3.metric("GPU 数量", device_info["cuda_count"])
+    d2.metric("加速后端", gpu_type)
+    d3.metric("GPU", gpu_label)
     d4.metric("本次训练", selected_device)
     if device_info["error"]:
         st.warning(f"设备检测失败: {device_info['error']}")
     if selected_device == "CPU":
         st.info("当前将使用 CPU 训练，速度通常明显慢于 GPU。")
-    elif not device_info["cuda_available"]:
-        st.warning("当前环境未检测到 CUDA，但选择了 GPU。请检查 PyTorch/CUDA 环境。")
 
     ui_section("执行", "启动后训练在后台运行，可随时停止。", "RUN")
     training_state = st.session_state.get("training_status", "未启动")

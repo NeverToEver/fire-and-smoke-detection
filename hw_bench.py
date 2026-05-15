@@ -1,8 +1,11 @@
 """
 受限环境硬件 Benchmark 模块
 
-通过 torch.cuda.set_per_process_memory_fraction() 限制 GPU 显存，
-通过 torch.set_num_threads() 限制 CPU 核心，
+支持 CUDA / Apple MPS / CPU 三种设备。
+- CUDA: 通过 set_per_process_memory_fraction 限制 GPU 显存
+- MPS: 通过 PYTORCH_MPS_HIGH_WATERMARK_RATIO 限制 GPU 显存
+- CPU: 通过 set_num_threads 限制核心数
+
 在受限条件下实测推理显存、延迟、FPS，验证目标设备可用性。
 """
 
@@ -20,30 +23,69 @@ import numpy as np
 # 设备检测
 # ═══════════════════════════════════════════
 
-def detect_cuda_device() -> dict:
-    """检测 CUDA 设备信息，无 CUDA 时返回空值且不抛异常"""
+def _get_device_type() -> str:
+    """返回当前首选加速设备类型: 'cuda' | 'mps' | 'cpu'"""
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def _get_device() -> torch.device:
+    """返回最佳可用加速设备"""
+    return torch.device(_get_device_type())
+
+
+def detect_device() -> dict:
+    """检测 CUDA / MPS 设备信息，均不可用时回退 CPU"""
+    device_type = _get_device_type()
+    result = {
+        "available": device_type != "cpu",
+        "device_type": device_type,
+        "device_name": "",
+        "total_memory_gb": 0.0,
+        "free_memory_gb": 0.0,
+    }
+
     try:
-        if not torch.cuda.is_available():
-            return {
-                "available": False,
-                "device_name": "",
-                "total_memory_gb": 0.0,
-                "free_memory_gb": 0.0,
-            }
-        free, total = torch.cuda.mem_get_info()
+        if device_type == "cuda":
+            result["device_name"] = torch.cuda.get_device_name(0)
+            free, total = torch.cuda.mem_get_info()
+            result["total_memory_gb"] = round(total / 1e9, 2)
+            result["free_memory_gb"] = round(free / 1e9, 2)
+        elif device_type == "mps":
+            result["device_name"] = "Apple MPS (Metal)"
+            # MPS 共享统一内存，无法精确获取显存大小
+            driver_mem = torch.mps.driver_allocated_memory() / 1e9
+            import psutil
+            vm = psutil.virtual_memory()
+            result["total_memory_gb"] = round(vm.total / 1e9, 2)
+            result["free_memory_gb"] = round(vm.available / 1e9, 2)
+    except Exception:
+        pass
+
+    return result
+
+
+def detect_cuda_device() -> dict:
+    """向后兼容别名 — 检测 CUDA 设备（优先），并回退 MPS/CPU"""
+    result = detect_device()
+    # 保持旧接口兼容：always has cuda-specific top-level keys
+    if result["device_type"] == "cuda":
         return {
             "available": True,
-            "device_name": torch.cuda.get_device_name(0),
-            "total_memory_gb": round(total / 1e9, 2),
-            "free_memory_gb": round(free / 1e9, 2),
+            "device_name": result["device_name"],
+            "total_memory_gb": result["total_memory_gb"],
+            "free_memory_gb": result["free_memory_gb"],
         }
-    except Exception:
-        return {
-            "available": False,
-            "device_name": "",
-            "total_memory_gb": 0.0,
-            "free_memory_gb": 0.0,
-        }
+    # 非 CUDA 时返回 MPS 信息或空
+    return {
+        "available": result["available"],
+        "device_name": result["device_name"] if result["available"] else "",
+        "total_memory_gb": result["total_memory_gb"],
+        "free_memory_gb": result["free_memory_gb"],
+    }
 
 
 def get_cpu_core_count() -> int:
@@ -51,30 +93,112 @@ def get_cpu_core_count() -> int:
 
 
 # ═══════════════════════════════════════════
+# 设备无关同步与内存工具
+# ═══════════════════════════════════════════
+
+def _synchronize():
+    """根据当前设备执行同步"""
+    dt = _get_device_type()
+    if dt == "cuda":
+        torch.cuda.synchronize()
+    elif dt == "mps":
+        torch.mps.synchronize()
+
+
+def _reset_peak_stats():
+    """重置峰值显存统计（MPS 不支持，静默跳过）"""
+    dt = _get_device_type()
+    if dt == "cuda":
+        torch.cuda.reset_peak_memory_stats()
+
+
+def _empty_cache():
+    """清空 GPU 缓存"""
+    dt = _get_device_type()
+    if dt == "cuda":
+        torch.cuda.empty_cache()
+    elif dt == "mps":
+        torch.mps.empty_cache()
+
+
+def _get_memory_snapshot() -> dict:
+    """获取当前设备显存快照"""
+    dt = _get_device_type()
+    if dt == "cuda":
+        return {
+            "allocated_mb": round(torch.cuda.memory_allocated() / 1e6, 1),
+            "peak_allocated_mb": round(torch.cuda.max_memory_allocated() / 1e6, 1),
+        }
+    elif dt == "mps":
+        current = torch.mps.current_allocated_memory() / 1e6
+        driver = torch.mps.driver_allocated_memory() / 1e6
+        return {
+            "allocated_mb": round(current, 1),
+            "peak_allocated_mb": round(driver, 1),
+        }
+    return {"allocated_mb": 0, "peak_allocated_mb": 0}
+
+
+def _get_total_memory_mb() -> float:
+    """获取设备总内存（MB），用于计算 headroom"""
+    dt = _get_device_type()
+    if dt == "cuda":
+        return torch.cuda.mem_get_info()[1] / 1e6
+    elif dt == "mps":
+        try:
+            import psutil
+            return psutil.virtual_memory().total / 1e6
+        except ImportError:
+            return 8192  # fallback: 8GB
+    return 8192
+
+
+# ═══════════════════════════════════════════
 # 环境约束
 # ═══════════════════════════════════════════
 
 def constrain_gpu_memory(target_gb: float) -> float:
-    """限制 PyTorch 可用显存为 target_gb GB，返回实际设置的 fraction"""
-    if not torch.cuda.is_available():
-        return 1.0
-    _, total = torch.cuda.mem_get_info()
-    total_gb = total / 1e9
-    fraction = min(target_gb / total_gb, 1.0)
-    torch.cuda.set_per_process_memory_fraction(fraction)
-    torch.cuda.empty_cache()
-    return fraction
+    """
+    限制 GPU 显存为 target_gb GB，返回实际设置的参数。
+    CUDA: 使用 set_per_process_memory_fraction
+    MPS: 使用 PYTORCH_MPS_HIGH_WATERMARK_RATIO（0.0~1.0）
+    """
+    dt = _get_device_type()
+    if dt == "cuda":
+        _, total = torch.cuda.mem_get_info()
+        total_gb = total / 1e9
+        fraction = min(target_gb / total_gb, 1.0)
+        torch.cuda.set_per_process_memory_fraction(fraction)
+        torch.cuda.empty_cache()
+        return fraction
+    elif dt == "mps":
+        # MPS 通过环境变量控制显存上限，但需在导入 torch 前设置
+        # 运行时只能通过 empty_cache 释放，无法精确限制
+        try:
+            import psutil
+            total = psutil.virtual_memory().total
+            ratio = min(target_gb / (total / 1e9), 1.0)
+            os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = str(ratio)
+            torch.mps.empty_cache()
+            return ratio
+        except ImportError:
+            pass
+    return 1.0
 
 
 def release_gpu_constraint():
     """释放 GPU 显存限制"""
-    if torch.cuda.is_available():
+    dt = _get_device_type()
+    if dt == "cuda":
         torch.cuda.set_per_process_memory_fraction(1.0)
         torch.cuda.empty_cache()
+    elif dt == "mps":
+        os.environ.pop("PYTORCH_MPS_HIGH_WATERMARK_RATIO", None)
+        torch.mps.empty_cache()
 
 
 def constrain_cpu_cores(n_cores: int) -> bool:
-    """限制 PyTorch 线程数模拟低核心环境，不影响进程级 CPU 亲和性"""
+    """限制 PyTorch 线程数模拟低核心环境"""
     max_cores = os.cpu_count() or 1
     n = max(1, min(n_cores, max_cores))
     torch.set_num_threads(n)
@@ -83,31 +207,25 @@ def constrain_cpu_cores(n_cores: int) -> bool:
 
 
 # ═══════════════════════════════════════════
-# CUDA 内存工具
+# CUDA 内存工具（向后兼容别名）
 # ═══════════════════════════════════════════
 
 def _reset_cuda_stats():
-    if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
+    _reset_peak_stats()
+    _empty_cache()
 
 
 def _reset_cuda_and_cache():
-    if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
-        torch.cuda.empty_cache()
+    _reset_peak_stats()
+    _empty_cache()
 
 
 def _get_cuda_memory_snapshot() -> dict:
-    if not torch.cuda.is_available():
-        return {"allocated_mb": 0, "peak_allocated_mb": 0}
-    return {
-        "allocated_mb": round(torch.cuda.memory_allocated() / 1e6, 1),
-        "peak_allocated_mb": round(torch.cuda.max_memory_allocated() / 1e6, 1),
-    }
+    return _get_memory_snapshot()
 
 
 # ═══════════════════════════════════════════
-# 公式估算（从 app.py 移植，用于对比）
+# 公式估算
 # ═══════════════════════════════════════════
 
 def estimate_memory(params_m: float, imgsz: int, batch: int, fp16: bool = False) -> dict:
@@ -171,11 +289,13 @@ def run_benchmark(
         "notes": [],
     }
 
-    # 加载模型
     from ultralytics import YOLO
 
-    cuda_available = torch.cuda.is_available()
-    use_cuda = cuda_available and cpu_cores <= 0  # GPU 推理除非显式要求 CPU 模式
+    device_type = _get_device_type()
+    gpu_available = device_type != "cpu"
+
+    # 推理设备决策
+    use_gpu = gpu_available and cpu_cores <= 0
 
     try:
         model = YOLO(model_path)
@@ -187,66 +307,71 @@ def run_benchmark(
     # 计算参数量
     total_params = sum(p.numel() for p in model.model.parameters())
     params_m = total_params / 1e6
-    bytes_per_param = 2 if (fp16 and use_cuda) else 4
+    bytes_per_param = 2 if (fp16 and use_gpu) else 4
     weights_mb = total_params * bytes_per_param / 1e6
     result["model_info"] = {"params_m": round(params_m, 2), "weights_mb": round(weights_mb, 1)}
 
     # 公式估算对比
-    result["estimated"] = estimate_memory(params_m, imgsz, batch, fp16 and use_cuda)
+    result["estimated"] = estimate_memory(params_m, imgsz, batch, fp16 and use_gpu)
 
     # ── 施加约束 ──
-    if gpu_memory_limit_gb > 0 and cuda_available:
+    if gpu_memory_limit_gb > 0 and gpu_available:
         fraction = constrain_gpu_memory(gpu_memory_limit_gb)
         result["constraint"]["gpu_fraction_set"] = round(fraction, 4)
         result["constraint"]["gpu_applied"] = True
-        use_cuda = True
+        result["constraint"]["device_type"] = device_type
+        use_gpu = True
     else:
         result["constraint"]["gpu_applied"] = False
 
-    cpu_affinity_ok = True
     if cpu_cores > 0:
         constrain_cpu_cores(cpu_cores)
         result["constraint"]["cpu_affinity_ok"] = True
-        use_cuda = False  # CPU 核心限制 → 切 CPU 推理模式
+        use_gpu = False  # CPU 核心限制 → 切 CPU 推理模式
+        if device_type == "mps":
+            result["notes"].append("MPS 设备使用 CPU 推理模式，性能不代表 GPU 加速效果")
     else:
         result["constraint"]["cpu_affinity_ok"] = True
 
     # ── 准备推理 ──
-    device_str = "cuda" if use_cuda else "cpu"
+    device_str = device_type if use_gpu else "cpu"
     result["device"] = device_str
-    device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device(device_str)
 
     try:
         model.model.to(device)
         model.model.eval()
 
         dummy = torch.randn(batch, 3, imgsz, imgsz, device=device)
-        if fp16 and use_cuda:
+        if fp16 and use_gpu and device_type == "cuda":
             model.model.half()
             dummy = dummy.half()
 
-        # ── 显存测量 (在 warmup 前 reset，覆盖模型+推理全周期) ──
-        if use_cuda:
-            _reset_cuda_stats()
-            model_allocated_mb = round(torch.cuda.memory_allocated() / 1e6, 1)
+        # ── 显存测量 ──
+        if use_gpu:
+            _reset_peak_stats()
+            _empty_cache()
+            _synchronize()
+            model_allocated_mb = round(_get_memory_snapshot()["allocated_mb"], 1)
 
-            # Warmup + measure
+            # Warmup
             with torch.no_grad():
                 for _ in range(num_warmup):
                     _ = model.model(dummy)
-            torch.cuda.synchronize()
-            _reset_cuda_stats()  # 清零 warmup 峰值
+            _synchronize()
+            _reset_peak_stats()
+
+            # 测量
             with torch.no_grad():
                 for _ in range(min(num_measure, 10)):
                     _ = model.model(dummy)
-            torch.cuda.synchronize()
-            snapshot = _get_cuda_memory_snapshot()
-            # 峰值 = 已加载模型 + 推理期间临时激活
+            _synchronize()
+            snapshot = _get_memory_snapshot()
             result["peak_memory_mb"] = round(model_allocated_mb + snapshot["peak_allocated_mb"], 1)
             if gpu_memory_limit_gb > 0:
                 limit_mb = gpu_memory_limit_gb * 1024
             else:
-                limit_mb = torch.cuda.mem_get_info()[1] / 1e6
+                limit_mb = _get_total_memory_mb()
             result["memory_headroom_mb"] = round(limit_mb - result["peak_memory_mb"], 1)
         else:
             result["peak_memory_mb"] = result["estimated"]["inference_mb"]
@@ -256,12 +381,10 @@ def run_benchmark(
         latencies = []
         with torch.no_grad():
             for i in range(num_measure):
-                if use_cuda:
-                    torch.cuda.synchronize()
+                _synchronize()
                 t0 = time.perf_counter()
                 _ = model.model(dummy)
-                if use_cuda:
-                    torch.cuda.synchronize()
+                _synchronize()
                 latencies.append((time.perf_counter() - t0) * 1000)
 
         arr = np.array(latencies)
@@ -277,9 +400,8 @@ def run_benchmark(
         }
         result["fps"] = round(1000.0 / result["latency"]["mean_ms"], 1)
 
-        # 仅 GPU 受限时，树莓派 CPU 模式标注
         if cpu_cores > 0:
-            result["notes"].append("CPU 推理基准在 x86 环境下测得，不等同 ARM NEON 性能")
+            result["notes"].append("CPU 推理基准在 x86/M-series 环境下测得，不等同 ARM NEON 性能")
 
     except torch.cuda.OutOfMemoryError as e:
         result["oom"] = True
@@ -288,22 +410,23 @@ def run_benchmark(
         if "out of memory" in str(e).lower():
             result["oom"] = True
             result["oom_message"] = str(e)
+        elif "MPS" in str(e) and "out of memory" in str(e).lower():
+            result["oom"] = True
+            result["oom_message"] = f"MPS OOM: {e}"
         else:
             raise
     finally:
-        # 恢复约束
         release_gpu_constraint()
 
-        # 清理显存
-        for _var in ("model", "dummy"):
-            try:
-                v = locals().get(_var)
-                if v is not None:
-                    del v
-            except (NameError, AttributeError):
-                pass
-        if use_cuda:
-            torch.cuda.empty_cache()
+        try:
+            del model
+        except (NameError, AttributeError):
+            pass
+        try:
+            del dummy
+        except (NameError, AttributeError):
+            pass
+        _empty_cache()
         try:
             torch.set_num_threads(get_cpu_core_count())
         except RuntimeError:
@@ -377,6 +500,8 @@ def get_preset(name: str) -> dict | None:
 
 def generate_charts(benchmark_result: dict, device_total_gb: float = 8.0) -> bytes:
     """生成 PNG 图表（显存饼图 + 延迟直方图 + 摘要卡片 + 实测vs公式对比），返回 PNG 二进制"""
+    import matplotlib
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig = plt.figure(figsize=(12, 10))
@@ -480,9 +605,3 @@ def generate_charts(benchmark_result: dict, device_total_gb: float = 8.0) -> byt
     plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
-
-
-# ═══════════════════════════════════════════
-# Streamlit UI 渲染
-# ═══════════════════════════════════════════
-

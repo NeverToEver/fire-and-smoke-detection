@@ -3,6 +3,10 @@
 import os
 from pathlib import Path
 
+from log_utils import get_logger
+
+_log = get_logger(__name__)
+
 
 def find_label_path(image_path: str) -> str | None:
     p = Path(image_path)
@@ -60,7 +64,7 @@ def get_image_files(dir_path: str, limit=500) -> list[str]:
     return files
 
 
-def _get_model_info(model_path: str) -> dict:
+def get_model_info(model_path: str) -> dict:
     """获取模型的参数量和 FLOPs"""
     import torch
     from ultralytics import YOLO
@@ -75,18 +79,24 @@ def _get_model_info(model_path: str) -> dict:
         dummy = torch.randn(1, 3, 640, 640)
         flops, _ = profile(model.model, inputs=(dummy,), verbose=False)
         flops_g = flops / 1e9
-    except Exception:
-        pass
+    except Exception as e:
+        _log.warning("FLOPs 计算失败 (model=%s): %s", model_path, e)
 
     return {"params_m": params_m, "flops_g": flops_g}
 
 
-def _run_eval(model_path: str, data_yaml: str):
+def run_eval(model_path: str, data_yaml: str):
     """运行评估，返回指标字典"""
     from gui.resources import load_model_cached
-    mtime = os.path.getmtime(model_path)
-    model = load_model_cached(model_path, mtime)
-    metrics = model.val(data=data_yaml, verbose=False)
+
+    try:
+        mtime = os.path.getmtime(model_path)
+        model = load_model_cached(model_path, mtime)
+        metrics = model.val(data=data_yaml, verbose=False)
+    except Exception:
+        _log.exception("模型评估失败: model=%s data=%s", model_path, data_yaml)
+        raise
+
     save_dir = getattr(metrics, "save_dir", None)
     return {
         "map50": metrics.box.map50,
@@ -97,29 +107,13 @@ def _run_eval(model_path: str, data_yaml: str):
     }
 
 
-def estimate_memory(params_m: float, imgsz: int, batch: int, fp16: bool = False) -> dict:
-    """估算模型显存占用 — 公式估算（用于对比）"""
-    bytes_per_param = 2 if fp16 else 4
-    scale = (imgsz / 640) ** 2
-    model_mb = params_m * bytes_per_param * 1.3
-    base_activation_mb = 250 if fp16 else 500
-    activation_mb = batch * scale * base_activation_mb
-    cuda_overhead_mb = 250
-    inference_mb = model_mb + activation_mb + cuda_overhead_mb
+# 向后兼容别名
+_get_model_info = get_model_info
+_run_eval = run_eval
 
-    grad_opt_mb = params_m * 4 * 3 * 1.1
-    extra_activation_mb = activation_mb * 1.5
-    train_workspace_mb = 200
-    training_mb = inference_mb + grad_opt_mb + extra_activation_mb + train_workspace_mb
 
-    return {
-        "model_mb": round(model_mb, 1),
-        "activation_mb": round(activation_mb, 1),
-        "inference_mb": round(inference_mb, 1),
-        "training_mb": round(training_mb, 1),
-        "inference_gb": round(inference_mb / 1024, 2),
-        "training_gb": round(training_mb / 1024, 2),
-    }
+# estimate_memory 已统一由 hw_bench 导出，此处仅保留别名以免破坏导入
+from hw_bench import estimate_memory  # noqa: E402, F811
 
 
 HARDWARE_PROFILES = {

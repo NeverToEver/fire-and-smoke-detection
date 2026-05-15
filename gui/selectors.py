@@ -1,6 +1,7 @@
 """数据集/模型/配置选择器（含拖拽上传 + 自动扫描 + 手动输入）"""
 
 import os
+import hashlib
 import zipfile
 import shutil
 from pathlib import Path
@@ -14,6 +15,15 @@ from gui.resources import (
     scan_datasets, scan_models, scan_model_configs,
     parse_data_yaml, save_uploaded_file, load_model_cached,
 )
+
+
+def _check_and_set_fingerprint(key: str, data: bytes) -> bool:
+    """检查数据指纹是否已处理过，未处理则更新并返回 True"""
+    fp = hashlib.sha256(data).hexdigest()
+    if st.session_state.get(key) == fp:
+        return False
+    st.session_state[key] = fp
+    return True
 
 
 def _extract_dataset_zip(uploaded_zip) -> str | None:
@@ -97,12 +107,9 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
             help="将完整数据集文件夹（含 data.yaml + train/valid/test 子目录）打包为 zip，拖入即可自动解压导入。",
         )
         if zip_upload is not None:
-            import hashlib as _hashlib
-            zip_fingerprint = _hashlib.sha256(zip_upload.getbuffer()).hexdigest()
-            if st.session_state.get(f"{key_prefix}_zip_processed") != zip_fingerprint:
+            if _check_and_set_fingerprint(f"{key_prefix}_zip_processed", zip_upload.getbuffer()):
                 result = _extract_dataset_zip(zip_upload)
                 if result:
-                    st.session_state[f"{key_prefix}_zip_processed"] = zip_fingerprint
                     st.session_state[f"{key_prefix}_last_ds"] = result
                     scan_datasets.clear()
                     return result
@@ -119,10 +126,7 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
             help="仅上传 data.yaml。若内部使用相对路径，图片目录需手动放置在 WSL 中。",
         )
         if uploaded is not None:
-            import hashlib as _hashlib
-            yaml_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
-            if st.session_state.get(f"{key_prefix}_yaml_processed") != yaml_fp:
-                st.session_state[f"{key_prefix}_yaml_processed"] = yaml_fp
+            if _check_and_set_fingerprint(f"{key_prefix}_yaml_processed", uploaded.getbuffer()):
                 uploaded_path = save_uploaded_file(uploaded, "datasets")
                 ui_path_chip(uploaded_path, "已上传数据集配置")
                 parsed = parse_data_yaml(uploaded_path)
@@ -186,10 +190,7 @@ def model_selector(key_prefix: str, label: str = "模型权重", allow_upload: b
             help="支持拖入 best.pt / last.pt。上传后会保存到项目的 .streamlit_uploads/models 目录。",
         )
         if uploaded is not None:
-            import hashlib as _hashlib
-            mdl_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
-            if st.session_state.get(f"{key_prefix}_mdl_processed") != mdl_fp:
-                st.session_state[f"{key_prefix}_mdl_processed"] = mdl_fp
+            if _check_and_set_fingerprint(f"{key_prefix}_mdl_processed", uploaded.getbuffer()):
                 uploaded_path = save_uploaded_file(uploaded, "models")
                 ui_path_chip(uploaded_path, "已上传模型权重")
                 load_model_cached.clear()
@@ -229,10 +230,7 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
         help="支持拖入模型结构 YAML，例如 yolo11-mobilenetv3-slimneck-p2.yaml。",
     )
     if uploaded is not None:
-        import hashlib as _hashlib
-        cfg_fp = _hashlib.sha256(uploaded.getbuffer()).hexdigest()
-        if st.session_state.get(f"{key_prefix}_cfg_processed") != cfg_fp:
-            st.session_state[f"{key_prefix}_cfg_processed"] = cfg_fp
+        if _check_and_set_fingerprint(f"{key_prefix}_cfg_processed", uploaded.getbuffer()):
             uploaded_path = save_uploaded_file(uploaded, "model_configs")
             ui_path_chip(uploaded_path, "已上传模型配置")
             return uploaded_path

@@ -1,9 +1,14 @@
 """页面: Inference"""
 
 import os
+import io as _io
+import json as _json
+import zipfile as _zipfile
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+import cv2
+import numpy as np
 from gui.components import ui_page_header, ui_section, ui_path_chip
 from gui.selectors import model_selector
 from gui.resources import load_model_cached, scan_datasets, parse_data_yaml
@@ -60,9 +65,6 @@ def page_inference():
             return
 
         if st.button("运行推理", type="primary", use_container_width=True):
-            import cv2
-            import numpy as np
-
             results_list = []
             for uploaded in uploaded_files:
                 file_bytes = np.frombuffer(uploaded.read(), np.uint8)
@@ -94,13 +96,10 @@ def page_inference():
 
             # 导出推理结果
             ui_section("导出结果", "打包所有检测结果图片。", "EXPORT")
-            import io as _io
-            import zipfile as _zipfile
             buf = _io.BytesIO()
             with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as zf:
                 for i, r in enumerate(results_list):
-                    import cv2 as _cv2
-                    img_bytes = _cv2.imencode(".jpg", _cv2.cvtColor(r["img"], _cv2.COLOR_RGB2BGR))[1].tobytes()
+                    img_bytes = cv2.imencode(".jpg", cv2.cvtColor(r["img"], cv2.COLOR_RGB2BGR))[1].tobytes()
                     zf.writestr(f"result_{i+1:03d}.jpg", img_bytes)
             buf.seek(0)
             st.download_button(
@@ -171,8 +170,6 @@ def page_inference():
                 st.warning("批量推理已取消")
                 st.rerun()
 
-            import cv2
-            import numpy as np
             total_fire = st.session_state.get("_inf_batch_fire", 0)
             total_smoke = st.session_state.get("_inf_batch_smoke", 0)
             all_confs = st.session_state.get("_inf_batch_confs", [])
@@ -242,7 +239,6 @@ def page_inference():
             st.rerun()
 
         if st.session_state.get("inf_batch_has"):
-            import numpy as np
             batch = st.session_state["inf_batch"]
             ui_section("推理汇总", "批量目录的目标计数和平均置信度。", "SUMMARY")
             c1, c2, c3, c4 = st.columns(4)
@@ -262,8 +258,6 @@ def page_inference():
 
             # 导出汇总 JSON
             ui_section("导出结果", "下载推理汇总数据和结果图片。", "EXPORT")
-            import json as _json
-            import io as _io
             summary = {
                 "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "model": model_path,

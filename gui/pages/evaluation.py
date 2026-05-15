@@ -1,14 +1,16 @@
 """页面: Evaluation"""
 
 import os
+from io import BytesIO
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+import matplotlib.pyplot as plt
 from gui import SCRIPT_DIR
 from gui.components import ui_page_header, ui_section, ui_path_chip
 from gui.selectors import model_selector, dataset_selector
 from gui.resources import scan_models, load_model_cached
-from gui.utils import _get_model_info, _run_eval
+from gui.utils import get_model_info, run_eval
 
 def page_evaluation():
     ui_page_header(
@@ -33,8 +35,8 @@ def page_evaluation():
         elif st.button("开始评估", type="primary", key="eval_single"):
             with st.spinner("正在评估模型..."):
                 try:
-                    st.session_state["eval_result"] = _run_eval(model_path, yaml_path)
-                    st.session_state["eval_model_info"] = _get_model_info(model_path)
+                    st.session_state["eval_result"] = run_eval(model_path, yaml_path)
+                    st.session_state["eval_model_info"] = get_model_info(model_path)
                     st.session_state["eval_model_path"] = model_path
                     st.session_state["eval_yaml_path"] = yaml_path
                     st.session_state["eval_has_result"] = True
@@ -81,8 +83,6 @@ def page_evaluation():
 
             # 导出评估结果
             ui_section("导出结果", "生成含全部评估指标和曲线的汇总图片。", "EXPORT")
-            from io import BytesIO
-            import matplotlib.pyplot as plt
 
             f1_val = 2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6)
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -184,8 +184,8 @@ def page_evaluation():
                 for i, (name, path) in enumerate(zip(selected_names, selected_paths)):
                     with st.spinner(f"评估 {name}..."):
                         try:
-                            metrics = _run_eval(path, yaml_path)
-                            info = _get_model_info(path)
+                            metrics = run_eval(path, yaml_path)
+                            info = get_model_info(path)
                             comparison_data.append({
                                 "模型": name,
                                 "mAP@50": metrics["map50"],
@@ -250,7 +250,6 @@ def page_evaluation():
 
                 # 水平条形图：参数量 / FLOPs
                 ui_section("模型复杂度对比", "参数量和计算量越低越适合边缘部署。", "COST")
-                import matplotlib.pyplot as plt
                 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
                 names = selected_names[:len(comparison_data)]
                 params_vals = [d["参数量 (M)"] for d in comparison_data]
@@ -272,8 +271,6 @@ def page_evaluation():
 
                 # 导出对比结果
                 ui_section("导出对比", "生成包含全部模型对比指标的汇总图片。", "EXPORT")
-                from io import BytesIO
-                import matplotlib.pyplot as plt
 
                 n = len(comparison_data)
                 fig, axes = plt.subplots(2, 2, figsize=(12, 8))

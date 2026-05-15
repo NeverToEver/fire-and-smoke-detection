@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import streamlit as st
+import cv2
 from gui.components import ui_page_header, ui_section, ui_path_chip
 from gui.selectors import dataset_selector
 from gui.resources import parse_data_yaml
@@ -97,7 +98,6 @@ def page_dataset():
     for i, img_path in enumerate(samples):
         col = cols[i % 4]
         try:
-            import cv2
             img = cv2.imread(img_path)
             if img is None:
                 col.warning(f"无法读取: {Path(img_path).name}")

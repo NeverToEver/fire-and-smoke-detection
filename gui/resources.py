@@ -1,6 +1,7 @@
 """资源扫描与缓存工具"""
 
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,9 @@ import streamlit as st
 import yaml
 
 from gui import SCRIPT_DIR, UPLOAD_DIR
+from log_utils import get_logger
+
+_log = get_logger(__name__)
 
 
 @st.cache_data(ttl=10, show_spinner=False)
@@ -40,8 +44,8 @@ def scan_datasets(search_dir: str | None = None):
                     "nc": nc,
                     "names": names,
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                _log.warning("扫描数据集文件失败: %s — %s", yf, e)
     return datasets
 
 
@@ -86,8 +90,8 @@ def scan_model_configs(search_dir: str | None = None):
                 "label": yf.name,
                 "path": str(yf.resolve()),
             })
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("扫描模型配置文件失败: %s — %s", yf, e)
     return configs
 
 
@@ -126,13 +130,20 @@ def parse_data_yaml(yaml_path: str) -> dict | None:
 
 
 def save_uploaded_file(uploaded_file, subdir: str) -> str:
-    """保存拖拽上传文件，并返回可供现有逻辑使用的本地路径。"""
+    """保存拖拽上传文件（原子写入），并返回可供现有逻辑使用的本地路径。"""
     safe_name = Path(uploaded_file.name).name
     target_dir = UPLOAD_DIR / subdir
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / safe_name
-    with open(target_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=str(target_dir), prefix=f".tmp_{safe_name}_")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
     return str(target_path.resolve())
 
 
@@ -144,10 +155,11 @@ def load_model_cached(model_path: str, _mtime: float = 0.0):
 
 @st.cache_data(ttl=10, show_spinner=False)
 def get_compute_devices() -> dict:
-    """检测当前 Python 环境可用的训练设备。"""
+    """检测当前 Python 环境可用的训练设备（CUDA / MPS / CPU）。"""
     info = {
         "torch_available": False,
         "cuda_available": False,
+        "mps_available": False,
         "cuda_count": 0,
         "gpus": [],
         "error": "",
@@ -156,10 +168,14 @@ def get_compute_devices() -> dict:
         import torch
         info["torch_available"] = True
         info["cuda_available"] = torch.cuda.is_available()
+        info["mps_available"] = torch.backends.mps.is_available()
         if info["cuda_available"]:
             info["cuda_count"] = torch.cuda.device_count()
             for i in range(info["cuda_count"]):
                 info["gpus"].append(torch.cuda.get_device_name(i))
+        elif info["mps_available"]:
+            info["cuda_count"] = 1
+            info["gpus"].append("Apple MPS (Metal)")
     except Exception as e:
         info["error"] = str(e)
     return info

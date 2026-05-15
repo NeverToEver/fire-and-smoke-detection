@@ -102,9 +102,72 @@ html, body, [class*="css"] {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* 根级颜色锁死，防止 Streamlit 自身主题穿透 */
+html { background: var(--bg); }
+body {
+    background: var(--bg);
+    color: var(--ink);
+}
 .stApp {
     background: var(--bg);
     color: var(--ink);
+}
+
+/* ═══════════════════════════════════════════
+   TEXT LOCKDOWN — 防止任何 Streamlit 默认颜色穿透
+   ═══════════════════════════════════════════ */
+.main .block-container,
+.main .block-container p,
+.main .block-container span,
+.main .block-container div,
+.main .block-container li,
+.main .block-container label:not([data-baseweb]) {
+    color: var(--ink);
+}
+
+/* st.markdown 内所有文字 */
+[data-testid="stMarkdownContainer"] {
+    color: var(--ink) !important;
+}
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] strong,
+[data-testid="stMarkdownContainer"] em {
+    color: var(--ink) !important;
+}
+[data-testid="stMarkdownContainer"] code {
+    color: var(--brand) !important;
+    background: var(--brand-soft) !important;
+}
+
+/* st.caption / small */
+.stCaption, .stMarkdown small, small, caption, .caption {
+    color: var(--muted) !important;
+}
+
+/* st.info / st.success / st.warning / st.error — 保留语义背景但确保文字可读 */
+div[data-testid="stAlert"] {
+    background: var(--surface) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--ink) !important;
+    font-family: var(--font-body) !important;
+}
+div[data-testid="stAlert"] * {
+    color: var(--ink) !important;
+}
+div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {
+    color: var(--ink) !important;
+}
+
+/* 通知 / Toast */
+div[data-testid="stNotification"],
+div[data-testid="stNotificationContent"],
+div[data-testid="stToast"],
+div[data-testid="stToastContainer"] {
+    color: var(--ink) !important;
+    background: var(--surface) !important;
 }
 
 /* Hide Streamlit chrome */
@@ -143,7 +206,25 @@ button[data-testid="stSidebarCloseButton"],
 
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stSidebar"] .stCaption,
-[data-testid="stSidebar"] small { color: var(--sidebar-muted) !important; }
+[data-testid="stSidebar"] small,
+[data-testid="stSidebar"] .stCaption *,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] small {
+    color: var(--sidebar-muted) !important;
+}
+
+/* 侧边栏 radio 内文字强制可见 */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] label *,
+[data-testid="stSidebar"] [role="radiogroup"] label p,
+[data-testid="stSidebar"] [role="radiogroup"] label span {
+    color: var(--sidebar-text) !important;
+}
+
+/* 侧边栏 divider 文字 */
+[data-testid="stSidebar"] hr,
+[data-testid="stSidebar"] .stDivider {
+    border-color: var(--sidebar-border) !important;
+}
 
 /* Sidebar: brand card */
 .sidebar-brand {
@@ -363,7 +444,7 @@ button[data-testid="stSidebarCloseButton"],
     border-radius: var(--radius-sm);
     border: 1px solid var(--line);
     background: var(--surface-raised);
-    color: var(--ink-2);
+    color: var(--ink-2) !important;
     font-family: var(--font-mono);
     font-size: 0.76rem;
     overflow-wrap: anywhere;
@@ -421,6 +502,14 @@ pre, code {
     font-size: 1.5rem !important;
     color: var(--ink) !important;
 }
+/* Metric delta（涨幅指示器） */
+[data-testid="stMetricDelta"] {
+    font-family: var(--font-body) !important;
+    font-size: 0.85rem !important;
+}
+[data-testid="stMetricDelta"] svg { display: none; }
+[data-testid="stMetricDelta"][data-testid*="up"] { color: var(--success) !important; }
+[data-testid="stMetricDelta"][data-testid*="down"] { color: var(--danger) !important; }
 
 /* ═══════════════════════════════════════════
    BUTTONS — warm, refined
@@ -485,19 +574,46 @@ input:focus, textarea:focus,
 }
 .stTextInput input,
 .stNumberInput input,
-textarea { color: var(--ink) !important; }
-.stTextInput input::placeholder,
-.stNumberInput input::placeholder {
-    color: var(--faint) !important;
+textarea {
+    color: var(--ink) !important;
+    caret-color: var(--brand) !important;
+}
+/* 输入框内的值（含只读态） */
+.stTextInput input[readonly],
+.stNumberInput input[readonly],
+input:read-only, input[disabled] {
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
     opacity: 1 !important;
 }
+.stTextInput input::placeholder,
+.stNumberInput input::placeholder,
+textarea::placeholder {
+    color: var(--faint) !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: var(--faint) !important;
+}
+/* Select 下拉框值 */
 .stSelectbox [data-baseweb="select"] *,
-.stMultiSelect [data-baseweb="select"] * { color: var(--ink) !important; }
+.stMultiSelect [data-baseweb="select"] * {
+    color: var(--ink) !important;
+}
 .stSelectbox [data-baseweb="select"] > div,
 .stMultiSelect [data-baseweb="select"] > div,
 .stSelectbox [data-baseweb="select"] input,
 .stMultiSelect [data-baseweb="select"] input {
     background: var(--surface) !important;
+    color: var(--ink) !important;
+}
+/* Select 下拉选项面板 */
+[role="listbox"] [role="option"],
+[data-baseweb="popover"] [role="option"] {
+    color: var(--ink) !important;
+    background: var(--surface) !important;
+}
+[role="listbox"] [role="option"]:hover,
+[data-baseweb="popover"] [role="option"]:hover {
+    background: var(--brand-soft) !important;
     color: var(--ink) !important;
 }
 .stSelectbox [data-baseweb="select"]:hover,
@@ -547,13 +663,16 @@ textarea { color: var(--ink) !important; }
 /* ═══════════════════════════════════════════
    TABLES & DATA
    ═══════════════════════════════════════════ */
-[data-testid="stDataFrame"] {
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
     border-radius: var(--radius) !important;
     overflow: hidden !important;
     border: 1px solid var(--line) !important;
     box-shadow: none;
+    background: var(--surface) !important;
 }
-[data-testid="stDataFrame"] th {
+[data-testid="stDataFrame"] th,
+[data-testid="stTable"] th {
     font-family: var(--font-mono) !important;
     font-weight: 500 !important;
     font-size: 0.72rem !important;
@@ -563,11 +682,20 @@ textarea { color: var(--ink) !important; }
     color: var(--muted) !important;
     border-bottom: 1px solid var(--line) !important;
 }
-[data-testid="stDataFrame"] td {
+[data-testid="stDataFrame"] td,
+[data-testid="stTable"] td {
     font-family: var(--font-mono) !important;
     font-size: 0.85rem !important;
     color: var(--ink) !important;
+    background: var(--surface) !important;
 }
+/* DataFrame 内所有文字后备保护 */
+[data-testid="stDataFrame"] *,
+[data-testid="stTable"] * {
+    color: var(--ink);
+}
+/* DataFrame 排序图标 */
+[data-testid="stDataFrame"] svg { color: var(--muted) !important; }
 
 /* ═══════════════════════════════════════════
    IMAGES
@@ -643,33 +771,41 @@ textarea { color: var(--ink) !important; }
 [role="option"]:hover { background: var(--brand-soft) !important; }
 
 /* ═══════════════════════════════════════════
-   ALERTS & NOTIFICATIONS
+   ALERTS & NOTIFICATIONS（已被 TEXT LOCKDOWN 段覆盖，此处仅保留结构样式）
    ═══════════════════════════════════════════ */
 [data-testid="stAlert"],
 [data-testid="stNotification"],
-[data-testid="stNotificationContent"] {
+[data-testid="stNotificationContent"],
+[data-testid="stToast"],
+[data-testid="stToastContainer"] {
     border-radius: var(--radius-sm) !important;
     border: 1px solid var(--line) !important;
-    background: var(--surface) !important;
     font-family: var(--font-body) !important;
-    color: var(--ink) !important;
-}
-[data-testid="stAlert"] p,
-[data-testid="stAlert"] span,
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
-[data-testid="stNotification"] p,
-[data-testid="stNotification"] span,
-[data-testid="stNotification"] [data-testid="stMarkdownContainer"],
-[data-testid="stNotificationContent"] p,
-[data-testid="stNotificationContent"] span {
-    color: var(--ink) !important;
 }
 
 /* ═══════════════════════════════════════════
-   PROGRESS
+   PROGRESS & SPINNER
    ═══════════════════════════════════════════ */
 [data-testid="stProgress"] > div > div {
     background: var(--brand) !important;
+}
+
+/* Spinner 文字 */
+[data-testid="stSpinner"] {
+    color: var(--muted) !important;
+    font-family: var(--font-body) !important;
+}
+
+/* st.status 容器 */
+[data-testid="stStatus"] {
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--surface) !important;
+    color: var(--ink) !important;
+    font-family: var(--font-body) !important;
+}
+[data-testid="stStatus"] * {
+    color: var(--ink) !important;
 }
 
 /* ═══════════════════════════════════════════
@@ -728,10 +864,38 @@ div[data-testid="stVerticalBlock"] { gap: 0.75rem; }
 
 
 def apply_theme_marker(theme_mode: str):
-    marker = {
+    """插入主题标记，供 CSS :root:has() 选择器切换日/夜间模式变量"""
+    marker_map = {
         "白天模式": "fs-theme-light",
         "夜间模式": "fs-theme-dark",
-    }.get(theme_mode)
+        "跟随系统": "fs-theme-light",  # Streamlit base 已固定为 light，跟随系统默认浅色
+    }
+    marker = marker_map.get(theme_mode)
     if not marker:
         return
-    st.markdown(f'<span id="{marker}" hidden></span>', unsafe_allow_html=True)
+
+    # 跟随系统时，用前端 JS 检测 OS 偏好并切换标记
+    if theme_mode == "跟随系统":
+        st.markdown(
+            """
+            <span id="fs-theme-light" hidden></span>
+            <script id="fs-theme-script">
+            (function() {
+                if (window.__fsThemeBound) return;
+                const el = document.getElementById('fs-theme-light');
+                if (!el) return;
+                const apply = function(e) {
+                    const dark = e.matches;
+                    if (el) el.id = dark ? 'fs-theme-dark' : 'fs-theme-light';
+                };
+                const mql = window.matchMedia('(prefers-color-scheme: dark)');
+                apply(mql);
+                mql.addEventListener('change', apply);
+                window.__fsThemeBound = true;
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(f'<span id="{marker}" hidden></span>', unsafe_allow_html=True)
