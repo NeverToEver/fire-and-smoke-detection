@@ -296,6 +296,9 @@ def page_evaluation():
         selected_names = st.session_state["cmp_names"]
 
         st.markdown("---")
+    else:
+        return
+
     col_title, col_clear = st.columns([4, 1])
     with col_title:
             st.markdown("##### Comparison Results")
