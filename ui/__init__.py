@@ -1,4 +1,4 @@
-"""GUI 包 — 共享常量"""
+"""Streamlit UI 包 — 共享常量与路径"""
 
 from pathlib import Path
 

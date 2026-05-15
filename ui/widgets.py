@@ -48,7 +48,7 @@ def _extract_dataset_zip(uploaded_zip) -> str | None:
         return None
     yaml_path = yaml_candidates[0]
     yaml_dir = yaml_path.parent
-    with open(yaml_path) as f:
+    with open(yaml_path, encoding="utf-8") as f:
         ydata = yaml.safe_load(f) or {}
     fixed = False
     for key in ["train", "val", "test"]:
@@ -82,7 +82,7 @@ def _extract_dataset_zip(uploaded_zip) -> str | None:
             ydata[key] = str(found.resolve())
             fixed = True
     if fixed:
-        with open(yaml_path, "w") as f:
+        with open(yaml_path, "w", encoding="utf-8") as f:
             yaml.dump(ydata, f)
     st.success(f"数据集已解压至 {extract_dir}")
     ui_path_chip(str(yaml_path), "已导入数据集")
@@ -95,7 +95,7 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
 
     options = ["-- 手动输入路径 --"] + [d["label"] for d in datasets]
     if "dataset_custom" not in st.session_state:
-        st.session_state.setdefault(f"{key_prefix}_mode", options[0])
+        st.session_state["dataset_custom"] = False
 
     tab1, tab2 = st.tabs(["拖拽上传 zip (推荐)", "拖拽上传 yaml"])
 

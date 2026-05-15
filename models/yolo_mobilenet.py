@@ -76,8 +76,10 @@ class MobileNetV3_Backbone(nn.Module):
 
 
 class YOLOv11_MobileNetV3_Head(nn.Module):
-    def __init__(self, ch=[24, 40, 80, 160]):
+    def __init__(self, ch=None):
         super().__init__()
+        if ch is None:
+            ch = [24, 40, 80, 160]
         p2, p3, p4, p5 = ch
 
         # --- Top-down 路径 ---
@@ -140,9 +142,15 @@ class DetectWrapper(UltralyticsDetect):
 
 
 # 注册到任务字典
-tasks.__dict__["MobileNetV3_Backbone"] = MobileNetV3_Backbone
-tasks.__dict__["YOLOv11_MobileNetV3_Head"] = YOLOv11_MobileNetV3_Head
-tasks.__dict__["Select"] = Select
-tasks.__dict__["DetectWrapper"] = DetectWrapper
-tasks.__dict__["GSConv"] = GSConv
-tasks.__dict__["VoVGSCSP"] = VoVGSCSP
+_register = {
+    "MobileNetV3_Backbone": MobileNetV3_Backbone,
+    "YOLOv11_MobileNetV3_Head": YOLOv11_MobileNetV3_Head,
+    "Select": Select,
+    "DetectWrapper": DetectWrapper,
+    "GSConv": GSConv,
+    "VoVGSCSP": VoVGSCSP,
+}
+for _name, _cls in _register.items():
+    tasks.__dict__[_name] = _cls
+    if tasks.__dict__.get(_name) is not _cls:
+        raise RuntimeError(f"模块注册失败: {_name} 被覆盖，可能是 ultralytics 版本不兼容")

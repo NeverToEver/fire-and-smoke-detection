@@ -898,4 +898,10 @@ def apply_theme_marker(theme_mode: str):
             unsafe_allow_html=True,
         )
     else:
-        st.markdown(f'<span id="{marker}" hidden></span>', unsafe_allow_html=True)
+        # 同时设置 :root 类作为旧浏览器 fallback（不支持 :has() 选择器时回退到类选择器）
+        root_class = "theme-dark" if theme_mode == "夜间模式" else "theme-light"
+        st.markdown(
+            f'<span id="{marker}" hidden></span>'
+            f'<script>(function(){{document.documentElement.classList.add("{root_class}");}})();</script>',
+            unsafe_allow_html=True,
+        )

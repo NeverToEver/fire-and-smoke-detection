@@ -31,7 +31,7 @@ def scan_datasets(search_dir: str | None = None):
                 continue
             seen.add(rp)
             try:
-                with open(yf) as f:
+                with open(yf, encoding="utf-8") as f:
                     d = yaml.safe_load(f)
                 if "train" not in d and "val" not in d:
                     continue
@@ -82,7 +82,7 @@ def scan_model_configs(search_dir: str | None = None):
     configs = []
     for yf in sorted(base.glob("*.yaml")):
         try:
-            with open(yf) as f:
+            with open(yf, encoding="utf-8") as f:
                 d = yaml.safe_load(f)
             if "backbone" not in d and "head" not in d:
                 continue
@@ -97,7 +97,7 @@ def scan_model_configs(search_dir: str | None = None):
 
 def parse_data_yaml(yaml_path: str) -> dict | None:
     try:
-        with open(yaml_path) as f:
+        with open(yaml_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except Exception as e:
         st.error(f"无法读取 {yaml_path}: {e}")

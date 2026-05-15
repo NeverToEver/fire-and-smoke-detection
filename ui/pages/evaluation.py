@@ -15,7 +15,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from ui import SCRIPT_DIR
 from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import model_selector, dataset_selector
-from ui.scanner import scan_models, load_model_cached, save_uploaded_file
+from ui.scanner import scan_models, save_uploaded_file
 from ui.image_utils import get_model_info, run_eval
 
 def page_evaluation():

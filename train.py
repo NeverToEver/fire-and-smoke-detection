@@ -16,25 +16,43 @@ def train(
     device: str = "auto",
     project_name: str = "fire_mobilenet_slimneck",
 ):
+    import torch
     from ultralytics import YOLO
     import models.yolo_mobilenet  # noqa: F401 — 注册自定义模块
     if model_yaml is None:
         model_yaml = str(SCRIPT_DIR / "configs/yolo11-mobilenetv3-slimneck-p2.yaml")
 
-    model = YOLO(model_yaml)
-    model.train(
-        data=data_yaml,
-        epochs=epochs,
-        imgsz=imgsz,
-        batch=batch,
-        device=device,
-        project="runs/detect",
-        name=project_name,
-        optimizer="auto",
-        lr0=lr0,
-        close_mosaic=close_mosaic,
-        patience=patience,
-    )
+    if not Path(data_yaml).exists():
+        raise FileNotFoundError(f"数据集配置文件不存在: {data_yaml}")
+    if not Path(model_yaml).exists():
+        raise FileNotFoundError(f"模型配置文件不存在: {model_yaml}")
+
+    try:
+        model = YOLO(model_yaml)
+    except Exception as e:
+        raise RuntimeError(f"模型加载失败，请检查模型配置文件 {model_yaml}: {e}") from e
+
+    try:
+        model.train(
+            data=data_yaml,
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=batch,
+            device=device,
+            project="runs/detect",
+            name=project_name,
+            optimizer="auto",
+            lr0=lr0,
+            close_mosaic=close_mosaic,
+            patience=patience,
+        )
+    except torch.cuda.OutOfMemoryError as e:
+        raise RuntimeError(f"CUDA 显存不足 (OOM)，请减小 batch size 或 imgsz。当前 batch={batch}, imgsz={imgsz}") from e
+    except RuntimeError as e:
+        msg = str(e).lower()
+        if "out of memory" in msg:
+            raise RuntimeError(f"显存不足 (OOM)，请减小 batch size 或 imgsz。当前 batch={batch}, imgsz={imgsz}") from e
+        raise
 
 
 if __name__ == "__main__":

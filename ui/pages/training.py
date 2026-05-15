@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from datetime import datetime
 import streamlit as st
 from ui import SCRIPT_DIR
 from ui.components import ui_page_header, ui_section, ui_path_chip
@@ -88,7 +89,7 @@ def page_training():
                     pass
 
             # 获取训练进程退出码
-            exit_code = st.session_state.get("_train_exit_code")
+            exit_code = st.session_state.pop("_train_exit_code", None)
             if exit_code is None:
                 try:
                     exit_code = os.waitpid(train_pid, os.WNOHANG)[1]
@@ -163,18 +164,20 @@ def page_training():
     device_info = get_compute_devices()
     device_options = ["CPU"]
     device_labels = {"CPU": "cpu"}
-    for i, gpu_name in enumerate(device_info["gpus"]):
-        if device_info["mps_available"]:
-            option = f"MPS (Apple GPU)"
-            device_labels[option] = "mps"
-        elif device_info["cuda_available"]:
+    if device_info["mps_available"]:
+        option = "MPS (Apple GPU)"
+        device_options.append(option)
+        device_labels[option] = "mps"
+    elif device_info["cuda_available"]:
+        for i, gpu_name in enumerate(device_info["gpus"]):
             option = f"GPU {i}: {gpu_name}"
-            device_labels[option] = str(i)
-        else:
-            option = f"GPU: {gpu_name}"
-            device_labels[option] = "cuda"
-        if option not in device_options:
             device_options.append(option)
+            device_labels[option] = str(i)
+    else:
+        for gpu_name in device_info["gpus"]:
+            option = f"GPU: {gpu_name}"
+            device_options.append(option)
+            device_labels[option] = "cpu"
 
     default_device_idx = 1 if len(device_options) > 1 else 0
     selected_device = st.radio(

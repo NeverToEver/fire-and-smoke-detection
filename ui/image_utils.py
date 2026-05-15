@@ -46,7 +46,7 @@ def draw_boxes_cv2(image, labels_path: str, class_names: dict, conf_threshold=0.
                 cv2.putText(image, label, (x1, max(y1 - 5, 15)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
     except Exception:
-        pass
+        _log.warning("标注文件解析失败: %s", labels_path)
     return image
 
 
@@ -105,11 +105,6 @@ def run_eval(model_path: str, data_yaml: str):
         "recall": metrics.box.mr if hasattr(metrics.box, "mr") else 0.0,
         "save_dir": str(save_dir) if save_dir else "",
     }
-
-
-# 向后兼容别名
-_get_model_info = get_model_info
-_run_eval = run_eval
 
 
 # estimate_memory 已统一由 engine/benchmark 导出，此处仅保留别名以免破坏导入

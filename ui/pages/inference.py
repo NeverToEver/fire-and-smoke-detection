@@ -185,6 +185,8 @@ def page_inference():
                     continue
                 results = model.predict(img, conf=conf_threshold, verbose=False)
                 boxes = results[0].boxes
+                cls_ids = None
+                confs = None
                 if boxes is not None and len(boxes) > 0:
                     cls_ids = boxes.cls.cpu().numpy().astype(int)
                     confs = boxes.conf.cpu().numpy()
@@ -194,12 +196,13 @@ def page_inference():
                 if len(results_display) < max_display:
                     result_img = results[0].plot()
                     result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
+                    has_boxes = boxes is not None and len(boxes) > 0
                     results_display.append({
                         "name": Path(img_path).name,
                         "img": result_img,
-                        "fire": int((cls_ids == 0).sum()) if boxes is not None and len(boxes) > 0 else 0,
-                        "smoke": int((cls_ids == 1).sum()) if boxes is not None and len(boxes) > 0 else 0,
-                        "has_boxes": boxes is not None and len(boxes) > 0,
+                        "fire": int((cls_ids == 0).sum()) if has_boxes else 0,
+                        "smoke": int((cls_ids == 1).sum()) if has_boxes else 0,
+                        "has_boxes": has_boxes,
                     })
                 progress_bar.progress((idx + 1) / len(test_images))
                 status_text.text(f"处理中: {idx + 1}/{len(test_images)} — {Path(img_path).name}")

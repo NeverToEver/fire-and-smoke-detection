@@ -56,12 +56,14 @@ def detect_device() -> dict:
             result["free_memory_gb"] = round(free / 1e9, 2)
         elif device_type == "mps":
             result["device_name"] = "Apple MPS (Metal)"
-            # MPS 共享统一内存，无法精确获取显存大小
-            driver_mem = torch.mps.driver_allocated_memory() / 1e9
-            import psutil
-            vm = psutil.virtual_memory()
-            result["total_memory_gb"] = round(vm.total / 1e9, 2)
-            result["free_memory_gb"] = round(vm.available / 1e9, 2)
+            try:
+                import psutil
+                vm = psutil.virtual_memory()
+                result["total_memory_gb"] = round(vm.total / 1e9, 2)
+                result["free_memory_gb"] = round(vm.available / 1e9, 2)
+            except ImportError:
+                result["total_memory_gb"] = 0.0
+                result["free_memory_gb"] = 0.0
     except Exception:
         pass
 
@@ -131,7 +133,10 @@ def _get_memory_snapshot() -> dict:
         }
     elif dt == "mps":
         current = torch.mps.current_allocated_memory() / 1e6
-        driver = torch.mps.driver_allocated_memory() / 1e6
+        try:
+            driver = torch.mps.driver_allocated_memory() / 1e6
+        except Exception:
+            driver = current
         return {
             "allocated_mb": round(current, 1),
             "peak_allocated_mb": round(driver, 1),
@@ -215,9 +220,8 @@ def _reset_cuda_stats():
     _empty_cache()
 
 
-def _reset_cuda_and_cache():
-    _reset_peak_stats()
-    _empty_cache()
+# 向后兼容别名
+_reset_cuda_and_cache = _reset_cuda_stats
 
 
 def _get_cuda_memory_snapshot() -> dict:
@@ -300,7 +304,7 @@ def run_benchmark(
     try:
         model = YOLO(model_path)
     except Exception as e:
-        result["oom"] = True
+        result["load_error"] = True
         result["oom_message"] = f"模型加载失败: {e}"
         return result
 
@@ -510,7 +514,8 @@ def generate_charts(benchmark_result: dict, device_total_gb: float = 8.0) -> byt
     # ── 1. 显存分布饼图 ──
     ax1 = fig.add_subplot(2, 2, 1)
     peak_mb = benchmark_result.get("peak_memory_mb", 0)
-    weights_mb = benchmark_result["model_info"]["weights_mb"]
+    model_info = benchmark_result.get("model_info", {})
+    weights_mb = model_info.get("weights_mb", 0)
     overhead_mb = max(peak_mb - weights_mb, 10) if peak_mb > 0 else 250
     limit_gb = benchmark_result["constraint"].get("gpu_memory_limit_gb", 0)
     if limit_gb > 0:
@@ -564,9 +569,9 @@ def generate_charts(benchmark_result: dict, device_total_gb: float = 8.0) -> byt
         constraint_desc.append("None (Baseline)")
 
     lines = [
-        f"Device: {benchmark_result['device'].upper()}",
+        f"Device: {benchmark_result.get('device', 'cpu').upper()}",
         f"Constraints: {', '.join(constraint_desc)}",
-        f"Model Params: {benchmark_result['model_info']['params_m']}M",
+        f"Model Params: {model_info.get('params_m', 0)}M",
         f"Peak Memory: {benchmark_result['peak_memory_mb']:.0f} MB",
         f"FPS: {benchmark_result['fps']:.1f}",
         f"Mean Latency: {benchmark_result['latency'].get('mean_ms', 0):.1f} ms",

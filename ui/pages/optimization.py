@@ -85,7 +85,6 @@ def page_optimization():
     ui_section("执行", "导出产物会写入 Ultralytics 返回的模型路径。", "EXPORT")
 
     if st.button("执行优化", type="primary", use_container_width=True):
-        import shutil as _shutil
         results = []
         export_dir = SCRIPT_DIR / "runs" / "optimize"
         export_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +98,7 @@ def page_optimization():
                 try:
                     out = model.export(format="onnx", half=True, imgsz=reduced_imgsz)
                     dest = export_dir / f"{model_name}_fp16_{reduced_imgsz}.onnx"
-                    _shutil.copy2(out, dest)
+                    shutil.copy2(out, dest)
                     out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
                     results.append(("FP16 ONNX", str(dest), out_size, "通用硬件，半精度"))
                 except Exception as e:
@@ -110,7 +109,7 @@ def page_optimization():
                 try:
                     out = model.export(format="onnx", half=False, imgsz=reduced_imgsz)
                     dest = export_dir / f"{model_name}_fp32_{reduced_imgsz}.onnx"
-                    _shutil.copy2(out, dest)
+                    shutil.copy2(out, dest)
                     out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
                     results.append(("FP32 ONNX", str(dest), out_size, "通用跨平台部署"))
                 except Exception as e:
@@ -121,7 +120,7 @@ def page_optimization():
                 try:
                     out = model.export(format="tflite", int8=True, imgsz=reduced_imgsz)
                     dest = export_dir / f"{model_name}_int8_{reduced_imgsz}.tflite"
-                    _shutil.copy2(out, dest)
+                    shutil.copy2(out, dest)
                     out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
                     results.append(("INT8 TFLite", str(dest), out_size, "边缘设备，极致压缩"))
                 except Exception as e:
@@ -129,7 +128,7 @@ def page_optimization():
                     try:
                         out = model.export(format="tflite", imgsz=reduced_imgsz)
                         dest = export_dir / f"{model_name}_fp32_{reduced_imgsz}.tflite"
-                        _shutil.copy2(out, dest)
+                        shutil.copy2(out, dest)
                         out_size = round(os.path.getsize(dest) / 1024 / 1024, 1)
                         results.append(("FP32 TFLite", str(dest), out_size, "边缘设备备用"))
                     except Exception as e2:
