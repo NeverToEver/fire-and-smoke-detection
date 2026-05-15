@@ -6,7 +6,12 @@ from io import BytesIO
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
 from gui import SCRIPT_DIR
 from gui.components import ui_page_header, ui_section, ui_path_chip
 from gui.selectors import model_selector, dataset_selector
@@ -242,6 +247,12 @@ def page_evaluation():
         elif not yaml_path or not Path(yaml_path).exists():
             st.info("请选择评估数据集")
 
+        # 签名跟踪：输入变化时自动清除旧结果
+        cmp_sig = f"{yaml_path}|{','.join(sorted(selected_labels))}"
+        if st.session_state.get("cmp_sig") != cmp_sig:
+            st.session_state["cmp_has_result"] = False
+            st.session_state["cmp_sig"] = cmp_sig
+
         if compare_ready and st.button("开始对比", type="primary", key="eval_compare_btn"):
             selected_paths = [available_models[l] for l in selected_labels if l in available_models]
             selected_names = [l for l in selected_labels if l in available_models]
@@ -249,23 +260,23 @@ def page_evaluation():
 
             progress = st.progress(0)
             for i, (name, path) in enumerate(zip(selected_names, selected_paths)):
-                with st.spinner(f"评估 {name}..."):
+                with st.spinner(f"Evaluating {name}..."):
                     try:
                         metrics = run_eval(path, yaml_path)
                         info = get_model_info(path)
                         comparison_data.append({
-                            "模型": name,
+                            "Model": name,
                             "mAP@50": metrics["map50"],
                             "mAP@50-95": metrics["map50_95"],
                             "Precision": metrics["precision"],
                             "Recall": metrics["recall"],
                             "F1": 2 * metrics["precision"] * metrics["recall"]
                                    / (metrics["precision"] + metrics["recall"] + 1e-6),
-                            "参数量 (M)": info["params_m"],
+                            "Params (M)": info["params_m"],
                             "GFLOPs": info["flops_g"],
                         })
                     except Exception as e:
-                        st.warning(f"{name} 评估失败: {e}")
+                        st.warning(f"{name} evaluation failed: {e}")
                 progress.progress((i + 1) / len(selected_paths))
             progress.empty()
 
@@ -274,134 +285,261 @@ def page_evaluation():
                 st.session_state["cmp_names"] = selected_names[:len(comparison_data)]
                 st.session_state["cmp_yaml"] = yaml_path
                 st.session_state["cmp_has_result"] = True
+                st.rerun()
             else:
-                st.error("至少需要 2 个模型评估成功才能对比")
+                st.error("At least 2 models must succeed for comparison")
                 st.session_state["cmp_has_result"] = False
 
-            # 持久化展示对比结果
-            if st.session_state.get("cmp_has_result"):
-                comparison_data = st.session_state["cmp_data"]
-                selected_names = st.session_state["cmp_names"]
-                import pandas as pd
-                df = pd.DataFrame(comparison_data)
+    # ── 持久化展示对比结果（在 button 外部，确保下载不清空）──
+    if st.session_state.get("cmp_has_result"):
+        comparison_data = st.session_state["cmp_data"]
+        selected_names = st.session_state["cmp_names"]
 
-                # 对比表格
-                ui_section("指标对比表", "同一评估集上的横向指标。", "TABLE")
-                st.dataframe(
-                    df.style.format({
-                        "mAP@50": "{:.4f}", "mAP@50-95": "{:.4f}",
-                        "Precision": "{:.4f}", "Recall": "{:.4f}", "F1": "{:.4f}",
-                        "参数量 (M)": "{:.1f}", "GFLOPs": "{:.1f}",
-                    }),
-                    use_container_width=True, hide_index=True,
-                )
+        st.markdown("---")
+    col_title, col_clear = st.columns([4, 1])
+    with col_title:
+            st.markdown("##### Comparison Results")
+    with col_clear:
+            if st.button("Clear Results", key="eval_cmp_clear"):
+                st.session_state["cmp_has_result"] = False
+                st.rerun()
 
-                # 分组柱形图：mAP
-                ui_section("检测精度对比", "mAP@50 与 mAP@50-95 对比。", "CHART")
-                chart_data_map = pd.DataFrame({
-                    "模型": selected_names[:len(comparison_data)],
-                    "mAP@50": [d["mAP@50"] for d in comparison_data],
-                    "mAP@50-95": [d["mAP@50-95"] for d in comparison_data],
-                }).set_index("模型")
-                st.bar_chart(chart_data_map, use_container_width=True)
+    df = pd.DataFrame(comparison_data)
 
-                # 分组柱形图：P/R/F1
-                ui_section("Precision / Recall / F1", "精确率、召回率和综合 F1 对比。", "CHART")
-                chart_data_pr = pd.DataFrame({
-                    "模型": selected_names[:len(comparison_data)],
-                    "Precision": [d["Precision"] for d in comparison_data],
-                    "Recall": [d["Recall"] for d in comparison_data],
-                    "F1": [d["F1"] for d in comparison_data],
-                }).set_index("模型")
-                st.bar_chart(chart_data_pr, use_container_width=True)
+    # 对比表格
+    ui_section("Metrics Table", "Side-by-side comparison on the same evaluation set.", "TABLE")
+    st.dataframe(
+            df.style.format({
+                "mAP@50": "{:.4f}", "mAP@50-95": "{:.4f}",
+                "Precision": "{:.4f}", "Recall": "{:.4f}", "F1": "{:.4f}",
+                "Params (M)": "{:.1f}", "GFLOPs": "{:.1f}",
+            }),
+            use_container_width=True, hide_index=True,
+    )
 
-                # 水平条形图：参数量 / FLOPs
-                ui_section("模型复杂度对比", "参数量和计算量越低越适合边缘部署。", "COST")
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
-                names = selected_names[:len(comparison_data)]
-                params_vals = [d["参数量 (M)"] for d in comparison_data]
-                flops_vals = [d["GFLOPs"] for d in comparison_data]
+    # Streamlit 内置柱形图
+    ui_section("Detection Accuracy", "mAP@50 vs mAP@50-95 across models.", "CHART")
+    chart_data_map = pd.DataFrame({
+            "Model": selected_names[:len(comparison_data)],
+            "mAP@50": [d["mAP@50"] for d in comparison_data],
+            "mAP@50-95": [d["mAP@50-95"] for d in comparison_data],
+    }).set_index("Model")
+    st.bar_chart(chart_data_map, use_container_width=True)
 
-                colors_params = ["#4CAF50" if v == min(params_vals) else "#2196F3" for v in params_vals]
-                ax1.barh(names, params_vals, color=colors_params)
-                ax1.set_xlabel("参数量 (M)")
-                ax1.set_title("参数量对比 (越小越好)")
+    ui_section("Precision / Recall / F1", "Precision, recall, and F1 score.", "CHART")
+    chart_data_pr = pd.DataFrame({
+            "Model": selected_names[:len(comparison_data)],
+            "Precision": [d["Precision"] for d in comparison_data],
+            "Recall": [d["Recall"] for d in comparison_data],
+            "F1": [d["F1"] for d in comparison_data],
+    }).set_index("Model")
+    st.bar_chart(chart_data_pr, use_container_width=True)
 
-                colors_flops = ["#4CAF50" if v == min(flops_vals) else "#2196F3" for v in flops_vals]
-                ax2.barh(names, flops_vals, color=colors_flops)
-                ax2.set_xlabel("GFLOPs")
-                ax2.set_title("计算量对比 (越小越好)")
+    # Matplotlib 水平条形图
+    ui_section("Complexity Comparison", "Lower is better for edge deployment.", "COST")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
+    names = selected_names[:len(comparison_data)]
+    params_vals = [d["Params (M)"] for d in comparison_data]
+    flops_vals = [d["GFLOPs"] for d in comparison_data]
 
-                fig.tight_layout()
-                st.pyplot(fig)
-                plt.close(fig)
+    colors_params = ["#4CAF50" if v == min(params_vals) else "#2196F3" for v in params_vals]
+    ax1.barh(names, params_vals, color=colors_params)
+    ax1.set_xlabel("Parameters (M)")
+    ax1.set_title("Parameters (lower is better)")
 
-                # 导出对比结果
-                ui_section("导出对比", "生成包含全部模型对比指标的汇总图片。", "EXPORT")
+    colors_flops = ["#4CAF50" if v == min(flops_vals) else "#2196F3" for v in flops_vals]
+    ax2.barh(names, flops_vals, color=colors_flops)
+    ax2.set_xlabel("GFLOPs")
+    ax2.set_title("Compute (lower is better)")
 
-                n = len(comparison_data)
-                fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-                fig.suptitle("Model Comparison Report", fontsize=16, fontweight="bold", fontfamily="monospace")
-                names_list = [d["模型"] for d in comparison_data]
-                colors = ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336"]
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
 
-                # mAP
-                ax = axes[0][0]
-                x = range(n)
-                ax.bar([i - 0.15 for i in x], [d["mAP@50"] for d in comparison_data], 0.28,
-                       color=colors[0], label="mAP@50")
-                ax.bar([i + 0.15 for i in x], [d["mAP@50-95"] for d in comparison_data], 0.28,
-                       color=colors[1], label="mAP@50-95")
-                ax.set_xticks(x)
-                ax.set_xticklabels(names_list, fontsize=8)
-                ax.set_ylim(0, 1)
-                ax.set_title("Detection Accuracy", fontsize=11)
-                ax.legend(fontsize=8)
+    # ── 导出（PNG + PDF）──
+    ui_section("Export Report", "Download comparison charts and tables as PNG or PDF.", "EXPORT")
 
-                # Precision / Recall / F1
-                ax = axes[0][1]
-                x = range(n)
-                w = 0.25
-                ax.bar([i - w for i in x], [d["Precision"] for d in comparison_data], w, color=colors[2], label="Precision")
-                ax.bar(x, [d["Recall"] for d in comparison_data], w, color=colors[3], label="Recall")
-                ax.bar([i + w for i in x], [d["F1"] for d in comparison_data], w, color=colors[4], label="F1")
-                ax.set_xticks(x)
-                ax.set_xticklabels(names_list, fontsize=8)
-                ax.set_ylim(0, 1)
-                ax.set_title("Precision / Recall / F1", fontsize=11)
-                ax.legend(fontsize=8)
+    n = len(comparison_data)
+    names_list = [d["Model"] for d in comparison_data]
+    colors = ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336"]
 
-                # 参数量
-                ax = axes[1][0]
-                params_vals = [d["参数量 (M)"] for d in comparison_data]
-                ax.bar(names_list, params_vals, color=[colors[i % len(colors)] for i in range(n)])
-                ax.set_title("Parameters (M)", fontsize=11)
-                ax.tick_params(axis="x", labelsize=8)
-                for i, v in enumerate(params_vals):
-                    ax.text(i, v + max(params_vals) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+    # ── PNG 导出 ──
+    fig_png, axes_png = plt.subplots(2, 2, figsize=(12, 8))
+    fig_png.suptitle("Model Comparison Report", fontsize=16, fontweight="bold")
 
-                # GFLOPs
-                ax = axes[1][1]
-                flops_vals = [d["GFLOPs"] for d in comparison_data]
-                ax.bar(names_list, flops_vals, color=[colors[i % len(colors)] for i in range(n)])
-                ax.set_title("GFLOPs", fontsize=11)
-                ax.tick_params(axis="x", labelsize=8)
-                for i, v in enumerate(flops_vals):
-                    ax.text(i, v + max(flops_vals) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+    ax = axes_png[0][0]
+    x = range(n)
+    ax.bar([i - 0.15 for i in x], [d["mAP@50"] for d in comparison_data], 0.28,
+               color=colors[0], label="mAP@50")
+    ax.bar([i + 0.15 for i in x], [d["mAP@50-95"] for d in comparison_data], 0.28,
+               color=colors[1], label="mAP@50-95")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names_list, fontsize=8)
+    ax.set_ylim(0, 1)
+    ax.set_title("Detection Accuracy", fontsize=11)
+    ax.legend(fontsize=8)
 
-                fig.tight_layout()
+    ax = axes_png[0][1]
+    w = 0.25
+    ax.bar([i - w for i in x], [d["Precision"] for d in comparison_data], w, color=colors[2], label="Precision")
+    ax.bar(x, [d["Recall"] for d in comparison_data], w, color=colors[3], label="Recall")
+    ax.bar([i + w for i in x], [d["F1"] for d in comparison_data], w, color=colors[4], label="F1")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names_list, fontsize=8)
+    ax.set_ylim(0, 1)
+    ax.set_title("Precision / Recall / F1", fontsize=11)
+    ax.legend(fontsize=8)
 
-                buf = BytesIO()
-                fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-                buf.seek(0)
-                plt.close(fig)
+    ax = axes_png[1][0]
+    params_vals_png = [d["Params (M)"] for d in comparison_data]
+    ax.bar(names_list, params_vals_png, color=[colors[i % len(colors)] for i in range(n)])
+    ax.set_title("Parameters (M)", fontsize=11)
+    ax.tick_params(axis="x", labelsize=8)
+    for i, v in enumerate(params_vals_png):
+            ax.text(i, v + max(params_vals_png) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
 
-                fname = f"compare_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                st.download_button(label="下载对比报告 (PNG)", data=buf, file_name=fname, mime="image/png")
+    ax = axes_png[1][1]
+    flops_vals_png = [d["GFLOPs"] for d in comparison_data]
+    ax.bar(names_list, flops_vals_png, color=[colors[i % len(colors)] for i in range(n)])
+    ax.set_title("GFLOPs", fontsize=11)
+    ax.tick_params(axis="x", labelsize=8)
+    for i, v in enumerate(flops_vals_png):
+            ax.text(i, v + max(flops_vals_png) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
 
-                eval_dir = (SCRIPT_DIR / "eval_results")
-                eval_dir.mkdir(exist_ok=True)
-                (eval_dir / fname).write_bytes(buf.getvalue())
-                st.caption(f"已自动保存至 {eval_dir.resolve() / fname}")
+    fig_png.tight_layout()
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # PNG 下载
+    buf_png = BytesIO()
+    fig_png.savefig(buf_png, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    buf_png.seek(0)
+    plt.close(fig_png)
+
+    col_png, col_pdf = st.columns(2)
+    with col_png:
+            fname_png = f"compare_{ts}.png"
+            st.download_button(
+                label="Download PNG Report",
+                data=buf_png,
+                file_name=fname_png,
+                mime="image/png",
+                use_container_width=True,
+            )
+
+    # ── PDF 导出 ──
+    buf_pdf = BytesIO()
+    with PdfPages(buf_pdf) as pdf:
+            # Page 1: Title + table
+            fig_p1, ax_p1 = plt.subplots(figsize=(10, 8))
+            ax_p1.axis("off")
+            ax_p1.text(0.5, 0.95, "Model Comparison Report", transform=ax_p1.transAxes,
+                      fontsize=20, fontweight="bold", ha="center", va="top")
+            ax_p1.text(0.5, 0.88, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                      transform=ax_p1.transAxes, fontsize=10, ha="center", va="top",
+                      fontfamily="monospace", color="#555555")
+
+            col_labels = ["Model", "mAP@50", "mAP@50-95", "Precision", "Recall", "F1", "Params(M)", "GFLOPs"]
+            cell_text = []
+            for d in comparison_data:
+                cell_text.append([
+                    d["Model"][:30],
+                    f"{d['mAP@50']:.4f}",
+                    f"{d['mAP@50-95']:.4f}",
+                    f"{d['Precision']:.4f}",
+                    f"{d['Recall']:.4f}",
+                    f"{d['F1']:.4f}",
+                    f"{d['Params (M)']:.1f}",
+                    f"{d['GFLOPs']:.1f}",
+                ])
+            tbl = ax_p1.table(cellText=cell_text, colLabels=col_labels, cellLoc="center",
+                             loc="center", colWidths=[0.18, 0.1, 0.12, 0.1, 0.1, 0.1, 0.1, 0.1])
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(8)
+            tbl.scale(1.2, 1.4)
+            for key, cell in tbl.get_celld().items():
+                if key[0] == 0:
+                    cell.set_facecolor("#333333")
+                    cell.set_text_props(color="white", fontweight="bold")
+                cell.set_edgecolor("#CCCCCC")
+            pdf.savefig(fig_p1)
+            plt.close(fig_p1)
+
+            # Page 2: mAP chart
+            fig_p2, ax_p2 = plt.subplots(figsize=(10, 6))
+            x = range(n)
+            ax_p2.bar([i - 0.15 for i in x], [d["mAP@50"] for d in comparison_data], 0.28,
+                     color=colors[0], label="mAP@50")
+            ax_p2.bar([i + 0.15 for i in x], [d["mAP@50-95"] for d in comparison_data], 0.28,
+                     color=colors[1], label="mAP@50-95")
+            ax_p2.set_xticks(x)
+            ax_p2.set_xticklabels(names_list, fontsize=9)
+            ax_p2.set_ylim(0, 1)
+            ax_p2.set_title("Detection Accuracy", fontsize=14, fontweight="bold")
+            ax_p2.set_ylabel("Score")
+            ax_p2.legend(fontsize=10)
+            ax_p2.grid(axis="y", alpha=0.3)
+            pdf.savefig(fig_p2)
+            plt.close(fig_p2)
+
+            # Page 3: Precision/Recall/F1
+            fig_p3, ax_p3 = plt.subplots(figsize=(10, 6))
+            w = 0.25
+            ax_p3.bar([i - w for i in x], [d["Precision"] for d in comparison_data], w, color=colors[2], label="Precision")
+            ax_p3.bar(x, [d["Recall"] for d in comparison_data], w, color=colors[3], label="Recall")
+            ax_p3.bar([i + w for i in x], [d["F1"] for d in comparison_data], w, color=colors[4], label="F1")
+            ax_p3.set_xticks(x)
+            ax_p3.set_xticklabels(names_list, fontsize=9)
+            ax_p3.set_ylim(0, 1)
+            ax_p3.set_title("Precision / Recall / F1", fontsize=14, fontweight="bold")
+            ax_p3.set_ylabel("Score")
+            ax_p3.legend(fontsize=10)
+            ax_p3.grid(axis="y", alpha=0.3)
+            pdf.savefig(fig_p3)
+            plt.close(fig_p3)
+
+            # Page 4: Parameters + GFLOPs
+            fig_p4, (ax_p4a, ax_p4b) = plt.subplots(1, 2, figsize=(10, 5))
+            ax_p4a.bar(names_list, params_vals_png, color=[colors[i % len(colors)] for i in range(n)])
+            ax_p4a.set_title("Parameters (M)", fontsize=13, fontweight="bold")
+            ax_p4a.set_ylabel("M")
+            ax_p4a.tick_params(axis="x", labelsize=8)
+            for i, v in enumerate(params_vals_png):
+                ax_p4a.text(i, v + max(params_vals_png) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+
+            ax_p4b.bar(names_list, flops_vals_png, color=[colors[i % len(colors)] for i in range(n)])
+            ax_p4b.set_title("GFLOPs", fontsize=13, fontweight="bold")
+            ax_p4b.tick_params(axis="x", labelsize=8)
+            for i, v in enumerate(flops_vals_png):
+                ax_p4b.text(i, v + max(flops_vals_png) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
+            fig_p4.tight_layout()
+            pdf.savefig(fig_p4)
+            plt.close(fig_p4)
+
+            # Metadata
+            d = pdf.infodict()
+            d["Title"] = "Model Comparison Report"
+            d["Author"] = "Fire & Smoke Detection Platform"
+            d["CreationDate"] = datetime.now()
+
+    buf_pdf.seek(0)
+
+    with col_pdf:
+            fname_pdf = f"compare_{ts}.pdf"
+            st.download_button(
+                label="Download PDF Report",
+                data=buf_pdf,
+                file_name=fname_pdf,
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+    # 自动保存到 eval_results
+    eval_dir = (SCRIPT_DIR / "eval_results")
+    eval_dir.mkdir(exist_ok=True)
+    (eval_dir / fname_png).write_bytes(buf_png.getvalue())
+    buf_pdf.seek(0)
+    (eval_dir / fname_pdf).write_bytes(buf_pdf.getvalue())
+    st.caption(f"Auto-saved to {eval_dir.resolve()}")
 
 
