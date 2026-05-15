@@ -131,8 +131,17 @@ def page_training():
     # 数据集选择
     ui_section("训练输入", "先确定数据集和模型结构，下面的训练命令会沿用这些路径。", "SETUP")
     yaml_path = dataset_selector("tr", "训练数据集")
+    # 防御性缓存：选择器返回有效路径时持久化到 session state
+    if yaml_path and Path(yaml_path).exists():
+        st.session_state["_tr_yaml_path"] = yaml_path
+    elif not yaml_path:
+        yaml_path = st.session_state.get("_tr_yaml_path", "")
 
     model_yaml = model_config_selector("tr", "模型配置")
+    if model_yaml and Path(model_yaml).exists():
+        st.session_state["_tr_model_yaml"] = model_yaml
+    elif not model_yaml:
+        model_yaml = st.session_state.get("_tr_model_yaml", "")
 
     if not model_yaml:
         st.info("请选择模型配置文件")

@@ -77,21 +77,34 @@ def scan_models(search_dir: str | None = None):
 
 @st.cache_data(ttl=10, show_spinner=False)
 def scan_model_configs(search_dir: str | None = None):
-    """扫描模型 YAML 配置文件"""
-    base = Path(search_dir) if search_dir else SCRIPT_DIR
+    """扫描模型 YAML 配置文件（项目根目录 + configs/ 子目录 + 上传目录，跳过 .venv）"""
+    bases = [Path(search_dir)] if search_dir else [
+        SCRIPT_DIR, SCRIPT_DIR / "configs", UPLOAD_DIR / "model_configs",
+    ]
     configs = []
-    for yf in sorted(base.glob("*.yaml")):
-        try:
-            with open(yf, encoding="utf-8") as f:
-                d = yaml.safe_load(f)
-            if "backbone" not in d and "head" not in d:
+    seen = set()
+    for base in bases:
+        if not base.exists():
+            continue
+        for yf in sorted(base.rglob("*.yaml")):
+            rp = str(yf.resolve())
+            if rp in seen:
                 continue
-            configs.append({
-                "label": yf.name,
-                "path": str(yf.resolve()),
-            })
-        except Exception as e:
-            _log.warning("扫描模型配置文件失败: %s — %s", yf, e)
+            if ".venv" in Path(rp).parts:
+                continue
+            seen.add(rp)
+            try:
+                with open(yf, encoding="utf-8") as f:
+                    d = yaml.safe_load(f)
+                if "backbone" not in d and "head" not in d:
+                    continue
+                label = f"{yf.parent.name}/{yf.name}" if yf.parent != base else yf.name
+                configs.append({
+                    "label": label,
+                    "path": rp,
+                })
+            except Exception as e:
+                _log.warning("扫描模型配置文件失败: %s — %s", yf, e)
     return configs
 
 
