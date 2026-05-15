@@ -102,7 +102,7 @@ else:
 ```
 __init__.py (root)
   → custom_yolov11_mobilenetv3.py (root)
-    → custom_models/__init__.py
+    → models/__init__.py
       → custom_yolov11_mobilenetv3.py (actual impl)
 ```
 
@@ -112,7 +112,7 @@ __init__.py (root)
 
 `import cv2` 出现在 L63, L174; `import numpy as np` 出现在 L64, L175, L245。应全部移到文件顶部。
 
-### N6. [CFG] `train_slimneck.py:14-26` — 训练超参数硬编码
+### N6. [CFG] `train.py:14-26` — 训练超参数硬编码
 
 epochs=150, batch=8, imgsz=640, lr0=0.01 等均为硬编码。CLI 仅暴露 `--data` 和 `--model`。
 
@@ -166,7 +166,7 @@ for _var in ("model", "dummy"):
 | **Architecture** | 19 files, 5 packages | `gui/` modularized well; root `__init__`/`custom_yolov11_mobilenetv3.py` redundant ✅ |
 | **Testing** | Search for `test_*`, `*_test*`, `unittest`, `pytest` | Zero tests found ❌ |
 | **Dependencies** | `requirements.txt` | All pinned with >= lower bounds, no upper bounds ⚠️ |
-| **Configuration** | `.streamlit/config.toml`, `train_slimneck.py` args | Streamlit theme configured; training params mostly hardcoded ✅ |
+| **Configuration** | `.streamlit/config.toml`, `train.py` args | Streamlit theme configured; training params mostly hardcoded ✅ |
 
 ---
 

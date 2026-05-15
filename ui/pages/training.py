@@ -5,10 +5,10 @@ import sys
 import subprocess
 from pathlib import Path
 import streamlit as st
-from gui import SCRIPT_DIR
-from gui.components import ui_page_header, ui_section, ui_path_chip
-from gui.selectors import dataset_selector, model_config_selector
-from gui.resources import scan_models, get_compute_devices
+from ui import SCRIPT_DIR
+from ui.components import ui_page_header, ui_section, ui_path_chip
+from ui.widgets import dataset_selector, model_config_selector
+from ui.scanner import scan_models, get_compute_devices
 
 def page_training():
     import signal as _signal
@@ -243,7 +243,7 @@ def page_training():
             "import json, sys, pathlib; "
             "args = json.load(open(sys.argv[1])); "
             "sys.path.insert(0, args['script_dir']); "
-            "import custom_models.custom_yolov11_mobilenetv3; "
+            "import models.yolo_mobilenet; "
             "from ultralytics import YOLO; "
             "m = YOLO(args['model_yaml']); "
             "m.train(data=args['data_yaml'], epochs=args['epochs'], imgsz=args['imgsz'], "

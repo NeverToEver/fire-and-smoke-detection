@@ -9,9 +9,9 @@ from pathlib import Path
 import streamlit as st
 import yaml
 
-from gui import UPLOAD_DIR
-from gui.components import ui_path_chip
-from gui.resources import (
+from ui import UPLOAD_DIR
+from ui.components import ui_path_chip
+from ui.scanner import (
     scan_datasets, scan_models, scan_model_configs,
     parse_data_yaml, save_uploaded_file, load_model_cached,
 )
@@ -227,7 +227,7 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
         f"拖拽上传 {label} YAML",
         type=["yaml", "yml"],
         key=f"{key_prefix}_cfg_upload",
-        help="支持拖入模型结构 YAML，例如 yolo11-mobilenetv3-slimneck-p2.yaml。",
+        help="支持拖入模型结构 YAML，例如 configs/yolo11-mobilenetv3-slimneck-p2.yaml。",
     )
     if uploaded is not None:
         if _check_and_set_fingerprint(f"{key_prefix}_cfg_processed", uploaded.getbuffer()):

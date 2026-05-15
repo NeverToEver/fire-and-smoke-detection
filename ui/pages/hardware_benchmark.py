@@ -4,7 +4,7 @@ import io
 import json
 from datetime import datetime
 
-from hw_bench import (
+from engine.benchmark import (
     get_cpu_core_count,
     get_preset_names,
     get_preset,
@@ -179,9 +179,9 @@ def render_benchmark_ui(
     st.markdown("---")
 
     cur_bench_sig = f"{model_path}:{imgsz}:{batch}:{fp16}:{gpu_limit}:{cpu_limit}"
-    if st.session_state.get("hw_bench_sig") != cur_bench_sig:
+    if st.session_state.get("engine/benchmark_sig") != cur_bench_sig:
         st.session_state["hw_has_bench_result"] = False
-        st.session_state["hw_bench_sig"] = cur_bench_sig
+        st.session_state["engine/benchmark_sig"] = cur_bench_sig
 
     if st.button("🚀 运行模拟 Benchmark", type="primary", use_container_width=True, key="hw_run_bench"):
         with st.spinner("正在受限环境中运行模型..."):
@@ -195,12 +195,12 @@ def render_benchmark_ui(
                 num_warmup=5,
                 num_measure=50,
             )
-            st.session_state["hw_bench_result"] = result
+            st.session_state["engine/benchmark_result"] = result
             st.session_state["hw_has_bench_result"] = True
 
     # ── 展示结果 ──
     if st.session_state.get("hw_has_bench_result"):
-        r = st.session_state["hw_bench_result"]
+        r = st.session_state["engine/benchmark_result"]
         st.markdown("---")
         st.markdown("##### Benchmark 结果")
 

@@ -9,10 +9,10 @@ from datetime import datetime
 import streamlit as st
 import cv2
 import numpy as np
-from gui.components import ui_page_header, ui_section, ui_path_chip
-from gui.selectors import model_selector
-from gui.resources import load_model_cached, scan_datasets, parse_data_yaml
-from gui.utils import get_image_files
+from ui.components import ui_page_header, ui_section, ui_path_chip
+from ui.widgets import model_selector
+from ui.scanner import load_model_cached, scan_datasets, parse_data_yaml
+from ui.image_utils import get_image_files
 
 def page_inference():
     ui_page_header(

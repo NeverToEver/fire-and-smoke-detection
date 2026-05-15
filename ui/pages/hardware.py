@@ -8,11 +8,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from gui import SCRIPT_DIR
-from gui.components import ui_page_header, ui_section, ui_path_chip
-from gui.selectors import model_selector, model_config_selector
-from gui.utils import estimate_memory, HARDWARE_PROFILES, get_model_info
-from gui.pages.hardware_bench import render_benchmark_ui
+from ui import SCRIPT_DIR
+from ui.components import ui_page_header, ui_section, ui_path_chip
+from ui.widgets import model_selector, model_config_selector
+from ui.image_utils import estimate_memory, HARDWARE_PROFILES, get_model_info
+from ui.pages.hardware_benchmark import render_benchmark_ui
 
 def page_hardware():
     ui_page_header(
@@ -48,7 +48,7 @@ def page_hardware():
 
     # ── 受限环境模拟分支 ──
     if hw_mode == "受限环境模拟":
-        from hw_bench import detect_device
+        from engine.benchmark import detect_device
 
         device_info_local = detect_device()
         render_benchmark_ui(st, target, imgsz, batch, fp16_mode, device_info_local)

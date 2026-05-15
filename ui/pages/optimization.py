@@ -6,11 +6,11 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 import streamlit as st
-from gui import SCRIPT_DIR
-from gui.components import ui_page_header, ui_section, ui_path_chip
-from gui.selectors import model_selector
-from gui.resources import load_model_cached
-from gui.utils import HARDWARE_PROFILES
+from ui import SCRIPT_DIR
+from ui.components import ui_page_header, ui_section, ui_path_chip
+from ui.widgets import model_selector
+from ui.scanner import load_model_cached
+from ui.image_utils import HARDWARE_PROFILES
 
 def page_optimization():
     ui_page_header(

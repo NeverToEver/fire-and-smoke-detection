@@ -3,10 +3,10 @@
 from pathlib import Path
 import streamlit as st
 import cv2
-from gui.components import ui_page_header, ui_section, ui_path_chip
-from gui.selectors import dataset_selector
-from gui.resources import parse_data_yaml
-from gui.utils import find_label_path, draw_boxes_cv2, get_image_files
+from ui.components import ui_page_header, ui_section, ui_path_chip
+from ui.widgets import dataset_selector
+from ui.scanner import parse_data_yaml
+from ui.image_utils import find_label_path, draw_boxes_cv2, get_image_files
 
 def page_dataset():
     ui_page_header(

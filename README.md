@@ -24,7 +24,7 @@
 - matplotlib
 - YAML
 
-模型结构配置位于 [yolo11-mobilenetv3-slimneck-p2.yaml](yolo11-mobilenetv3-slimneck-p2.yaml)，自定义模块注册逻辑位于 [custom_models/custom_yolov11_mobilenetv3.py](custom_models/custom_yolov11_mobilenetv3.py)。
+模型结构配置位于 [configs/yolo11-mobilenetv3-slimneck-p2.yaml](configs/yolo11-mobilenetv3-slimneck-p2.yaml)，自定义模块注册逻辑位于 [models/yolo_mobilenet.py](models/yolo_mobilenet.py)。
 
 ## 环境准备
 
@@ -85,7 +85,7 @@ names:
 默认模型配置为：
 
 ```text
-yolo11-mobilenetv3-slimneck-p2.yaml
+configs/yolo11-mobilenetv3-slimneck-p2.yaml
 ```
 
 该配置定义：
@@ -126,7 +126,7 @@ runs/detect/<输出目录名>/
 也可以使用命令行训练：
 
 ```bash
-python train_slimneck.py --data /path/to/data.yaml --model yolo11-mobilenetv3-slimneck-p2.yaml
+python train.py --data /path/to/data.yaml --model configs/yolo11-mobilenetv3-slimneck-p2.yaml
 ```
 
 ## 推理
@@ -197,11 +197,11 @@ python -m streamlit run app.py
 ```text
 .
 ├── app.py
-├── train_slimneck.py
+├── train.py
 ├── requirements.txt
-├── yolo11-mobilenetv3-slimneck-p2.yaml
-├── custom_models/
+├── configs/yolo11-mobilenetv3-slimneck-p2.yaml
+├── models/
 │   ├── __init__.py
-│   └── custom_yolov11_mobilenetv3.py
+│   └── yolo_mobilenet.py
 └── README.md
 ```

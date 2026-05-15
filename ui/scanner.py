@@ -8,8 +8,8 @@ from pathlib import Path
 import streamlit as st
 import yaml
 
-from gui import SCRIPT_DIR, UPLOAD_DIR
-from log_utils import get_logger
+from ui import SCRIPT_DIR, UPLOAD_DIR
+from engine.logging import get_logger
 
 _log = get_logger(__name__)
 

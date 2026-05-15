@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/bin/python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
 
 # 命令行训练
-python train_slimneck.py --data /path/to/data.yaml [--model yolo11-mobilenetv3-slimneck-p2.yaml]
+python train.py --data /path/to/data.yaml [--model configs/yolo11-mobilenetv3-slimneck-p2.yaml]
 
 # 安装依赖
 .venv/bin/pip install -r requirements.txt
@@ -29,15 +29,15 @@ python train_slimneck.py --data /path/to/data.yaml [--model yolo11-mobilenetv3-s
 
 ### 模型定义
 
-- **`custom_models/custom_yolov11_mobilenetv3.py`** — 核心模型定义，包含：
+- **`models/yolo_mobilenet.py`** — 核心模型定义，包含：
   - `GSConv` / `GSBottleneck` / `VoVGSCSP`：Slim-Neck 轻量化卷积模块，用于替换 YOLO 标准 C3k2 和 Conv
   - `MobileNetV3_Backbone`：基于 torchvision MobileNetV3-Large，输出 4 层特征（通道 [24,40,80,160]）
   - `YOLOv11_MobileNetV3_Head`：FPN+PAN 双向特征融合，Top-down 和 Bottom-up 路径均使用 VoVGSCSP/GSConv
   - `DetectWrapper`：包装 ultralytics 原生 Detect 头
   - 所有自定义模块通过 monkey-patch 注册到 `ultralytics.nn.tasks.__dict__`，使 YAML 配置文件可直接引用
-- **`custom_models/__init__.py`** — 重导出 `MobileNetV3_Backbone` 和 `YOLOv11_MobileNetV3_Head`
-- **`custom_yolov11_mobilenetv3.py`**（根目录）— 仅一行 `from custom_models.custom_yolov11_mobilenetv3 import *`，供 `train_slimneck.py` 的 `import custom_models.custom_yolov11_mobilenetv3` 触发注册
-- **`yolo11-mobilenetv3-slimneck-p2.yaml`** — 模型结构配置，`nc: 2`（火焰/烟雾二分类），定义 backbone → head → detect 三层
+- **`models/__init__.py`** — 重导出 `MobileNetV3_Backbone` 和 `YOLOv11_MobileNetV3_Head`
+- **`yolo_mobilenet.py`**（根目录）— 仅一行 `from models.yolo_mobilenet import *`，供 `train.py` 的 `import models.yolo_mobilenet` 触发注册
+- **`configs/yolo11-mobilenetv3-slimneck-p2.yaml`** — 模型结构配置，`nc: 2`（火焰/烟雾二分类），定义 backbone → head → detect 三层
 
 ### Streamlit 应用 (`app.py`, ~2800 行)
 
@@ -52,7 +52,7 @@ python train_slimneck.py --data /path/to/data.yaml [--model yolo11-mobilenetv3-s
 
 ### 训练脚本
 
-- **`train_slimneck.py`** — 命令行训练入口，使用 argparse 接收 `--data` 和 `--model` 参数。关键参数：epochs=150, imgsz=640, batch=8, lr0=0.01, close_mosaic=20, patience=50。通过 `import custom_models.custom_yolov11_mobilenetv3` 触发模块注册后调用 `YOLO(model_yaml).train()`。
+- **`train.py`** — 命令行训练入口，使用 argparse 接收 `--data` 和 `--model` 参数。关键参数：epochs=150, imgsz=640, batch=8, lr0=0.01, close_mosaic=20, patience=50。通过 `import models.yolo_mobilenet` 触发模块注册后调用 `YOLO(model_yaml).train()`。
 
 ## 数据流
 

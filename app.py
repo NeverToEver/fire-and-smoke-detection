@@ -16,18 +16,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from gui import SCRIPT_DIR, UPLOAD_DIR
-from gui.theme import CSS_STYLE, apply_theme_marker
-from gui.resources import scan_datasets, scan_models, scan_model_configs, load_model_cached
-from gui.pages.dataset import page_dataset
-from gui.pages.training import page_training
-from gui.pages.inference import page_inference
-from gui.pages.evaluation import page_evaluation
-from gui.pages.hardware import page_hardware
-from gui.pages.optimization import page_optimization
+from ui import SCRIPT_DIR, UPLOAD_DIR
+from ui.theme import CSS_STYLE, apply_theme_marker
+from ui.scanner import scan_datasets, scan_models, scan_model_configs, load_model_cached
+from ui.pages.dataset import page_dataset
+from ui.pages.training import page_training
+from ui.pages.inference import page_inference
+from ui.pages.evaluation import page_evaluation
+from ui.pages.hardware import page_hardware
+from ui.pages.optimization import page_optimization
 
 # 注册自定义模块到 ultralytics
-import custom_models.custom_yolov11_mobilenetv3  # noqa: F401
+import models.yolo_mobilenet  # noqa: F401
 
 # 注入 CSS
 st.markdown(CSS_STYLE, unsafe_allow_html=True)

@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from log_utils import get_logger
+from engine.logging import get_logger
 
 _log = get_logger(__name__)
 
@@ -87,7 +87,7 @@ def get_model_info(model_path: str) -> dict:
 
 def run_eval(model_path: str, data_yaml: str):
     """运行评估，返回指标字典"""
-    from gui.resources import load_model_cached
+    from ui.scanner import load_model_cached
 
     try:
         mtime = os.path.getmtime(model_path)
@@ -112,8 +112,8 @@ _get_model_info = get_model_info
 _run_eval = run_eval
 
 
-# estimate_memory 已统一由 hw_bench 导出，此处仅保留别名以免破坏导入
-from hw_bench import estimate_memory  # noqa: E402, F811
+# estimate_memory 已统一由 engine/benchmark 导出，此处仅保留别名以免破坏导入
+from engine.benchmark import estimate_memory  # noqa: E402, F811
 
 
 HARDWARE_PROFILES = {

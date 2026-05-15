@@ -17,9 +17,9 @@ def train(
     project_name: str = "fire_mobilenet_slimneck",
 ):
     from ultralytics import YOLO
-    import custom_models.custom_yolov11_mobilenetv3  # noqa: F401 — 注册自定义模块
+    import models.yolo_mobilenet  # noqa: F401 — 注册自定义模块
     if model_yaml is None:
-        model_yaml = str(SCRIPT_DIR / "yolo11-mobilenetv3-slimneck-p2.yaml")
+        model_yaml = str(SCRIPT_DIR / "configs/yolo11-mobilenetv3-slimneck-p2.yaml")
 
     model = YOLO(model_yaml)
     model.train(
