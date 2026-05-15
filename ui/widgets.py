@@ -233,8 +233,12 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
         if _check_and_set_fingerprint(f"{key_prefix}_cfg_processed", uploaded.getbuffer()):
             uploaded_path = save_uploaded_file(uploaded, "model_configs")
             ui_path_chip(uploaded_path, "已上传模型配置")
+            st.session_state[f"{key_prefix}_last_cfg"] = uploaded_path
             return uploaded_path
         else:
+            persisted = st.session_state.get(f"{key_prefix}_last_cfg", "")
+            if persisted and Path(persisted).exists():
+                return persisted
             for c in scan_model_configs():
                 if c["path"].endswith(Path(uploaded.name).name):
                     return c["path"]
@@ -259,4 +263,9 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
         manual_cfg = st.text_input("或手动输入", placeholder="模型 yaml 路径", key=f"{key_prefix}_cfg_manual")
     if manual_cfg:
         model_yaml = manual_cfg
+        st.session_state[f"{key_prefix}_last_cfg"] = manual_cfg
+    if not model_yaml:
+        persisted = st.session_state.get(f"{key_prefix}_last_cfg", "")
+        if persisted and Path(persisted).exists():
+            model_yaml = persisted
     return model_yaml
