@@ -261,7 +261,7 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
     cfg_options = [c["label"] for c in configs]
     default_idx = 0
     for i, c in enumerate(configs):
-        if "slimneck" in c["label"].lower():
+        if "mobilenetv3-p2" in c["label"].lower() and "slimneck" not in c["label"].lower():
             default_idx = i
             break
 

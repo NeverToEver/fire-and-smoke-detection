@@ -10,7 +10,7 @@ backbone:
 
 head:
   # 接收 backbone 的 list，经过 Slim-Neck，输出融合后的 [P2_f, P3_out, P4_out, P5_out]
-  - [-1, 1, YOLOv11_MobileNetV3_Head, []]
+  - [-1, 1, YOLOv11_MobileNetV3_SlimNeck_Head, []]
 
   # 【终极奥义】：不要 Select，直接把上一层输出的 list 喂给 DetectWrapper
   # 强制硬编码告诉它通道数是 [nc, 64, 128, 256, 256]

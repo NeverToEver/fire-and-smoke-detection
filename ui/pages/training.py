@@ -3,6 +3,10 @@
 import os
 import sys
 import time
+import shutil
+import hashlib
+import tempfile
+import importlib.util
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -198,6 +202,54 @@ def page_training():
 
     ui_path_chip(model_yaml, "模型配置")
 
+    # ── 模型架构文件（高级）──
+    MODEL_PY = SCRIPT_DIR / "models" / "yolo_mobilenet.py"
+    with st.expander("模型架构文件（高级）", expanded=False):
+        st.caption(f"当前架构: `{MODEL_PY}`")
+        arch_upload = st.file_uploader(
+            "拖拽上传替换模型架构 .py 文件",
+            type=["py"],
+            key="tr_arch_upload",
+            help="上传自定义 backbone/neck/head 定义文件。原文件将备份为 .bak。",
+        )
+        if arch_upload is not None:
+            fp_key = "tr_arch_processed"
+            new_fp = hashlib.sha256(arch_upload.getbuffer()).hexdigest()
+            if st.session_state.get(fp_key) != new_fp:
+                tmp_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, dir=str(SCRIPT_DIR), prefix="_arch_test_") as tf:
+                        tf.write(arch_upload.getvalue().decode("utf-8"))
+                        tmp_path = tf.name
+                    spec = importlib.util.spec_from_file_location("_arch_test", tmp_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    required = ["MobileNetV3_Backbone", "YOLOv11_MobileNetV3_Head", "DetectWrapper"]
+                    missing = [n for n in required if not hasattr(mod, n)]
+                    if missing:
+                        st.error(f"缺少必要类: {', '.join(missing)}。文件必须导出: {', '.join(required)}。")
+                    else:
+                        bak = Path(str(MODEL_PY) + ".bak")
+                        if not bak.exists():
+                            shutil.copy2(MODEL_PY, bak)
+                        shutil.copy2(tmp_path, MODEL_PY)
+                        st.session_state[fp_key] = new_fp
+                        st.success("模型架构已替换，原文件备份为 .bak。请手动刷新页面以重新加载模块。")
+                        if st.button("刷新页面", key="tr_reload_arch"):
+                            st.rerun()
+                except SyntaxError as e:
+                    st.error(f"Python 语法错误: {e}")
+                except Exception as e:
+                    st.error(f"导入验证失败: {e}")
+                finally:
+                    if tmp_path:
+                        try:
+                            Path(tmp_path).unlink()
+                        except OSError:
+                            pass
+            else:
+                st.info("此文件已处理过。")
+
     ui_section("超参数", "调整滑块快速配置训练策略，也可手动微调每个参数。", "PARAMS")
 
     # ── 训练策略预设 ──
@@ -246,7 +298,7 @@ def page_training():
     c5, c6, c7 = st.columns(3)
     close_mosaic = c5.number_input("Close Mosaic", min_value=0, max_value=50, step=5, key="_tr_close_mosaic", help="在第 N 个 epoch 关闭 mosaic")
     patience = c6.number_input("Patience (早停)", min_value=10, max_value=200, step=10, key="_tr_patience", help="连续 N 个 epoch 无提升则自动停止")
-    project_name = c7.text_input("输出目录名", value="fire_mobilenet_slimneck")
+    project_name = c7.text_input("输出目录名", value="fire_mobilenet")
 
     ui_section("训练设备", "检查当前环境是否有 GPU（CUDA / MPS），并手动选择本次训练使用的设备。", "DEVICE")
     device_info = get_compute_devices()
@@ -310,7 +362,6 @@ def page_training():
             return
 
         import json as _json
-        import tempfile as _tempfile
         train_args = {
             "model_yaml": str(model_yaml),
             "data_yaml": str(yaml_path),
@@ -325,7 +376,7 @@ def page_training():
             "patience": patience,
             "script_dir": str(SCRIPT_DIR),
         }
-        args_file = _tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="_train_tmp_", delete=False, dir=str(SCRIPT_DIR))
+        args_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="_train_tmp_", delete=False, dir=str(SCRIPT_DIR))
         args_file.write(_json.dumps(train_args))
         args_file.close()
 
@@ -334,7 +385,9 @@ def page_training():
             "import json, sys, pathlib; "
             "args = json.load(open(sys.argv[1])); "
             "sys.path.insert(0, args['script_dir']); "
-            "import models.yolo_mobilenet; "
+            "import models.yolo_mobilenet\n"
+            "try:\n    import models.yolo_mobilenet_slimneck\n"
+            "except ImportError:\n    pass\n"
             "from ultralytics import YOLO; "
             "m = YOLO(args['model_yaml']); "
             "m.train(data=args['data_yaml'], epochs=args['epochs'], imgsz=args['imgsz'], "

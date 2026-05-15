@@ -1,0 +1,16 @@
+# configs/yolo11-mobilenetv3-p2.yaml
+nc: 2
+
+scales:
+  n: [0.33, 0.25, 1024]
+
+backbone:
+  # [P2, P3, P4, P5] — 4 层多尺度特征
+  - [-1, 1, MobileNetV3_Backbone, []]
+
+head:
+  # FPN + PAN 双向融合 → [P2_f, P3_out, P4_out, P5_out]
+  - [-1, 1, YOLOv11_MobileNetV3_Head, []]
+
+  # 直接喂给 DetectWrapper，通道 [nc, 64, 128, 256, 256]
+  - [-1, 1, DetectWrapper, [nc, 64, 128, 256, 256]]

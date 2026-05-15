@@ -26,8 +26,12 @@ from ui.pages.evaluation import page_evaluation
 from ui.pages.hardware import page_hardware
 from ui.pages.optimization import page_optimization
 
-# 注册自定义模块到 ultralytics
+# 注册自定义模块到 ultralytics（标准 + Slim-Neck 双架构兼容）
 import models.yolo_mobilenet  # noqa: F401
+try:
+    import models.yolo_mobilenet_slimneck  # noqa: F401
+except ImportError:
+    pass
 
 # 注入 CSS
 st.markdown(CSS_STYLE, unsafe_allow_html=True)

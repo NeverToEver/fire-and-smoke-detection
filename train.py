@@ -14,13 +14,17 @@ def train(
     close_mosaic: int = 20,
     patience: int = 50,
     device: str = "auto",
-    project_name: str = "fire_mobilenet_slimneck",
+    project_name: str = "fire_mobilenet",
 ):
     import torch
     from ultralytics import YOLO
     import models.yolo_mobilenet  # noqa: F401 — 注册自定义模块
+    try:
+        import models.yolo_mobilenet_slimneck  # noqa: F401
+    except ImportError:
+        pass
     if model_yaml is None:
-        model_yaml = str(SCRIPT_DIR / "configs/yolo11-mobilenetv3-slimneck-p2.yaml")
+        model_yaml = str(SCRIPT_DIR / "configs/yolo11-mobilenetv3-p2.yaml")
 
     if not Path(data_yaml).exists():
         raise FileNotFoundError(f"数据集配置文件不存在: {data_yaml}")
@@ -66,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--close-mosaic", type=int, default=20, help="关闭 mosaic 的 epoch (default: 20)")
     parser.add_argument("--patience", type=int, default=50, help="早停 patience (default: 50)")
     parser.add_argument("--device", default="auto", help="训练设备 (default: auto)")
-    parser.add_argument("--name", default="fire_mobilenet_slimneck", help="输出目录名")
+    parser.add_argument("--name", default="fire_mobilenet", help="输出目录名")
     args = parser.parse_args()
     train(
         args.data, args.model,
