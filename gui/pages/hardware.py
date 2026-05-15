@@ -143,6 +143,10 @@ def page_hardware():
         import pandas as pd
         df = pd.DataFrame(rows)
         st.dataframe(df, use_container_width=True, hide_index=True)
+        csv_hw = df.to_csv(index=False).encode("utf-8")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        st.download_button("下载兼容性表格 (CSV)", csv_hw, f"hardware_compat_{ts}.csv",
+                           "text/csv", key="dl_hw_csv", use_container_width=True)
 
         # 导出硬件预估报告
         ui_section("导出报告", "将预估结果导出为 JSON 文件。", "EXPORT")

@@ -299,6 +299,8 @@ def page_evaluation():
     else:
         return
 
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     col_title, col_clear = st.columns([4, 1])
     with col_title:
             st.markdown("##### Comparison Results")
@@ -319,6 +321,10 @@ def page_evaluation():
             }),
             use_container_width=True, hide_index=True,
     )
+    # 表格单独下载 CSV
+    csv_buf = df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download CSV", csv_buf, f"metrics_{ts}.csv", "text/csv",
+                        key="dl_csv", use_container_width=True)
 
     # Streamlit 内置柱形图
     ui_section("Detection Accuracy", "mAP@50 vs mAP@50-95 across models.", "CHART")
@@ -328,6 +334,24 @@ def page_evaluation():
             "mAP@50-95": [d["mAP@50-95"] for d in comparison_data],
     }).set_index("Model")
     st.bar_chart(chart_data_map, use_container_width=True)
+    # 单独下载 mAP 图
+    fig_map, ax_map = plt.subplots(figsize=(8, 4))
+    x_map = range(len(chart_data_map))
+    ax_map.bar([i - 0.15 for i in x_map], chart_data_map["mAP@50"], 0.28, color="#2196F3", label="mAP@50")
+    ax_map.bar([i + 0.15 for i in x_map], chart_data_map["mAP@50-95"], 0.28, color="#4CAF50", label="mAP@50-95")
+    ax_map.set_xticks(x_map)
+    ax_map.set_xticklabels(chart_data_map.index, fontsize=8)
+    ax_map.set_ylim(0, 1)
+    ax_map.set_title("Detection Accuracy", fontweight="bold")
+    ax_map.legend(fontsize=8)
+    ax_map.grid(axis="y", alpha=0.3)
+    fig_map.tight_layout()
+    buf_map = BytesIO()
+    fig_map.savefig(buf_map, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    buf_map.seek(0)
+    plt.close(fig_map)
+    st.download_button("Download Chart (PNG)", buf_map, f"mAP_{ts}.png", "image/png",
+                        key="dl_map", use_container_width=True)
 
     ui_section("Precision / Recall / F1", "Precision, recall, and F1 score.", "CHART")
     chart_data_pr = pd.DataFrame({
@@ -337,6 +361,26 @@ def page_evaluation():
             "F1": [d["F1"] for d in comparison_data],
     }).set_index("Model")
     st.bar_chart(chart_data_pr, use_container_width=True)
+    # 单独下载 PRF 图
+    fig_prf, ax_prf = plt.subplots(figsize=(8, 4))
+    x_prf = range(len(chart_data_pr))
+    w = 0.25
+    ax_prf.bar([i - w for i in x_prf], chart_data_pr["Precision"], w, color="#FF9800", label="Precision")
+    ax_prf.bar(x_prf, chart_data_pr["Recall"], w, color="#9C27B0", label="Recall")
+    ax_prf.bar([i + w for i in x_prf], chart_data_pr["F1"], w, color="#F44336", label="F1")
+    ax_prf.set_xticks(x_prf)
+    ax_prf.set_xticklabels(chart_data_pr.index, fontsize=8)
+    ax_prf.set_ylim(0, 1)
+    ax_prf.set_title("Precision / Recall / F1", fontweight="bold")
+    ax_prf.legend(fontsize=8)
+    ax_prf.grid(axis="y", alpha=0.3)
+    fig_prf.tight_layout()
+    buf_prf = BytesIO()
+    fig_prf.savefig(buf_prf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    buf_prf.seek(0)
+    plt.close(fig_prf)
+    st.download_button("Download Chart (PNG)", buf_prf, f"PRF_{ts}.png", "image/png",
+                        key="dl_prf", use_container_width=True)
 
     # Matplotlib 水平条形图
     ui_section("Complexity Comparison", "Lower is better for edge deployment.", "COST")
@@ -357,7 +401,12 @@ def page_evaluation():
 
     fig.tight_layout()
     st.pyplot(fig)
+    buf_cost = BytesIO()
+    fig.savefig(buf_cost, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    buf_cost.seek(0)
     plt.close(fig)
+    st.download_button("Download Chart (PNG)", buf_cost, f"complexity_{ts}.png", "image/png",
+                        key="dl_complexity", use_container_width=True)
 
     # ── 导出（PNG + PDF）──
     ui_section("Export Report", "Download comparison charts and tables as PNG or PDF.", "EXPORT")
@@ -410,8 +459,6 @@ def page_evaluation():
             ax.text(i, v + max(flops_vals_png) * 0.02, f"{v:.1f}", ha="center", fontsize=9, fontweight="bold")
 
     fig_png.tight_layout()
-
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # PNG 下载
     buf_png = BytesIO()

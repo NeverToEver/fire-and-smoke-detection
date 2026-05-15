@@ -228,12 +228,31 @@ def render_benchmark_ui(
 
         with st.expander("延迟详情"):
             lat = r["latency"]
-            st.write({
+            lat_dict = {
                 "min_ms": lat.get("min_ms"), "p50_ms": lat.get("p50_ms"),
                 "mean_ms": lat.get("mean_ms"), "p95_ms": lat.get("p95_ms"),
                 "p99_ms": lat.get("p99_ms"), "max_ms": lat.get("max_ms"),
                 "std_ms": lat.get("std_ms"),
-            })
+            }
+            st.write(lat_dict)
+
+        # Benchmark 单独下载
+        import pandas as _pd
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bench_df = _pd.DataFrame([{
+            "峰值显存(MB)": r["peak_memory_mb"],
+            "FPS": r["fps"],
+            "平均延迟(ms)": r["latency"].get("mean_ms", 0),
+            "P95延迟(ms)": r["latency"].get("p95_ms", 0),
+            "推理设备": r["device"],
+            "模型路径": model_path,
+            "输入尺寸": imgsz,
+            **lat_dict,
+        }])
+        csv_bench = bench_df.to_csv(index=False).encode("utf-8")
+        st.download_button("下载 Benchmark 数据 (CSV)", csv_bench,
+                           f"benchmark_{ts}.csv", "text/csv",
+                           key="dl_bench_csv", use_container_width=True)
 
         # ── 导出 ──
         col_dl1, col_dl2 = st.columns(2)

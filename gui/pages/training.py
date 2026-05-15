@@ -118,6 +118,11 @@ def page_training():
                 if results_img.exists():
                     ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
                     st.image(str(results_img), caption="训练曲线", use_container_width=True)
+                    ts_img = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    with open(results_img, "rb") as f:
+                        st.download_button("下载训练曲线 (PNG)", f.read(),
+                                           f"results_{ts_img}.png", "image/png",
+                                           key="dl_train_results", use_container_width=True)
             st.rerun()
             return
 
@@ -277,5 +282,10 @@ def page_training():
             if results_img.exists():
                 with st.expander("最近训练结果", expanded=False):
                     st.image(str(results_img), caption="训练曲线", use_container_width=True)
+                    ts_recent = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    with open(results_img, "rb") as f:
+                        st.download_button("下载训练曲线 (PNG)", f.read(),
+                                           f"results_{ts_recent}.png", "image/png",
+                                           key="dl_recent_results", use_container_width=True)
 
 
