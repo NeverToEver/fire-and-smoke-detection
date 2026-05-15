@@ -1,6 +1,7 @@
 """页面: Evaluation"""
 
 import os
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
@@ -9,7 +10,7 @@ import matplotlib.pyplot as plt
 from gui import SCRIPT_DIR
 from gui.components import ui_page_header, ui_section, ui_path_chip
 from gui.selectors import model_selector, dataset_selector
-from gui.resources import scan_models, load_model_cached
+from gui.resources import scan_models, load_model_cached, save_uploaded_file
 from gui.utils import get_model_info, run_eval
 
 def page_evaluation():
@@ -155,61 +156,127 @@ def page_evaluation():
 
     # ══════════════ Tab 2: 多模型对比 ══════════════
     with tab2:
-        ui_section("对比输入", "选择 2 到 5 个模型，使用同一个数据集评估。", "COMPARE")
+        ui_section("对比输入", "选择 2 到 5 个模型，使用同一个数据集评估。支持拖拽上传、自动发现和手动输入路径。", "COMPARE")
         models = scan_models()
-        if not models:
-            st.info("未发现已训练模型，请先训练模型")
-        else:
-            model_options = [m["label"] for m in models]
-            selected_labels = st.multiselect(
-                "选择要对比的模型（2-5 个）",
-                model_options,
-                max_selections=5,
-                key="eval_compare",
-            )
-            yaml_path = dataset_selector("eval_cmp", "评估数据集")
 
-            compare_ready = len(selected_labels) >= 2 and yaml_path and Path(yaml_path).exists()
-            if len(selected_labels) < 2:
-                st.info("请至少选择 2 个模型进行对比")
-            elif not yaml_path or not Path(yaml_path).exists():
-                st.info("请选择评估数据集")
+        # 收集所有可选模型路径: {label: path}
+        available_models = {}  # label → path
+        if models:
+            for m in models:
+                available_models[m["label"]] = m["path"]
 
-            if compare_ready and st.button("开始对比", type="primary", key="eval_compare_btn"):
-                selected_paths = [m["path"] for m in models if m["label"] in selected_labels]
-                selected_names = [Path(p).parent.name for p in selected_paths]
-                comparison_data = []
-
-                progress = st.progress(0)
-                for i, (name, path) in enumerate(zip(selected_names, selected_paths)):
-                    with st.spinner(f"评估 {name}..."):
-                        try:
-                            metrics = run_eval(path, yaml_path)
-                            info = get_model_info(path)
-                            comparison_data.append({
-                                "模型": name,
-                                "mAP@50": metrics["map50"],
-                                "mAP@50-95": metrics["map50_95"],
-                                "Precision": metrics["precision"],
-                                "Recall": metrics["recall"],
-                                "F1": 2 * metrics["precision"] * metrics["recall"]
-                                       / (metrics["precision"] + metrics["recall"] + 1e-6),
-                                "参数量 (M)": info["params_m"],
-                                "GFLOPs": info["flops_g"],
-                            })
-                        except Exception as e:
-                            st.warning(f"{name} 评估失败: {e}")
-                    progress.progress((i + 1) / len(selected_paths))
-                progress.empty()
-
-                if len(comparison_data) >= 2:
-                    st.session_state["cmp_data"] = comparison_data
-                    st.session_state["cmp_names"] = selected_names[:len(comparison_data)]
-                    st.session_state["cmp_yaml"] = yaml_path
-                    st.session_state["cmp_has_result"] = True
+        # ── 拖拽上传 ──
+        uploaded_files = st.file_uploader(
+            "拖拽上传模型权重（可多选）",
+            type=["pt"],
+            accept_multiple_files=True,
+            key="eval_cmp_upload",
+            help="支持拖入 best.pt / last.pt。上传后自动加入对比列表。",
+        )
+        if uploaded_files:
+            for uf in uploaded_files:
+                fp = hashlib.sha256(uf.getbuffer()).hexdigest()
+                upload_key = f"eval_cmp_uploaded_{fp[:12]}"
+                if upload_key not in st.session_state:
+                    saved_path = save_uploaded_file(uf, "models")
+                    label = f"[上传] {Path(saved_path).name}"
+                    st.session_state[upload_key] = {"label": label, "path": saved_path}
+                    available_models[label] = saved_path
+                    scan_models.clear()
                 else:
-                    st.error("至少需要 2 个模型评估成功才能对比")
-                    st.session_state["cmp_has_result"] = False
+                    cached = st.session_state[upload_key]
+                    available_models[cached["label"]] = cached["path"]
+
+        # ── 自动发现 + 手动输入 ──
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            if available_models:
+                default_selection = []
+                # 自动选中最新的上传模型
+                for label in available_models:
+                    if label.startswith("[上传]"):
+                        default_selection.append(label)
+                selected_labels = st.multiselect(
+                    "选择要对比的模型（2-5 个）",
+                    options=list(available_models.keys()),
+                    default=default_selection[:5],
+                    max_selections=5,
+                    key="eval_compare",
+                )
+            else:
+                selected_labels = []
+                st.info("未发现已训练模型，请上传或手动输入路径")
+
+        with col2:
+            manual_input = st.text_area(
+                "手动输入路径",
+                placeholder="每行一个 .pt 路径",
+                key="eval_cmp_manual",
+                height=100,
+            )
+            if manual_input:
+                for line in manual_input.strip().split("\n"):
+                    p = line.strip()
+                    if p and Path(p).exists() and p not in available_models.values():
+                        label = f"[手动] {Path(p).name}"
+                        available_models[label] = p
+
+        # 同步手动输入到选中列表
+        if manual_input:
+            for line in manual_input.strip().split("\n"):
+                p = line.strip()
+                if p and Path(p).exists():
+                    matching_label = None
+                    for label, path in available_models.items():
+                        if path == p:
+                            matching_label = label
+                            break
+                    if matching_label and matching_label not in selected_labels:
+                        selected_labels.append(matching_label)
+
+        yaml_path = dataset_selector("eval_cmp", "评估数据集")
+
+        compare_ready = len(selected_labels) >= 2 and yaml_path and Path(yaml_path).exists()
+        if len(selected_labels) < 2:
+            st.info("请至少选择 2 个模型进行对比")
+        elif not yaml_path or not Path(yaml_path).exists():
+            st.info("请选择评估数据集")
+
+        if compare_ready and st.button("开始对比", type="primary", key="eval_compare_btn"):
+            selected_paths = [available_models[l] for l in selected_labels if l in available_models]
+            selected_names = [l for l in selected_labels if l in available_models]
+            comparison_data = []
+
+            progress = st.progress(0)
+            for i, (name, path) in enumerate(zip(selected_names, selected_paths)):
+                with st.spinner(f"评估 {name}..."):
+                    try:
+                        metrics = run_eval(path, yaml_path)
+                        info = get_model_info(path)
+                        comparison_data.append({
+                            "模型": name,
+                            "mAP@50": metrics["map50"],
+                            "mAP@50-95": metrics["map50_95"],
+                            "Precision": metrics["precision"],
+                            "Recall": metrics["recall"],
+                            "F1": 2 * metrics["precision"] * metrics["recall"]
+                                   / (metrics["precision"] + metrics["recall"] + 1e-6),
+                            "参数量 (M)": info["params_m"],
+                            "GFLOPs": info["flops_g"],
+                        })
+                    except Exception as e:
+                        st.warning(f"{name} 评估失败: {e}")
+                progress.progress((i + 1) / len(selected_paths))
+            progress.empty()
+
+            if len(comparison_data) >= 2:
+                st.session_state["cmp_data"] = comparison_data
+                st.session_state["cmp_names"] = selected_names[:len(comparison_data)]
+                st.session_state["cmp_yaml"] = yaml_path
+                st.session_state["cmp_has_result"] = True
+            else:
+                st.error("至少需要 2 个模型评估成功才能对比")
+                st.session_state["cmp_has_result"] = False
 
             # 持久化展示对比结果
             if st.session_state.get("cmp_has_result"):
