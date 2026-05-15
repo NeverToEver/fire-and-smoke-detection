@@ -33,59 +33,23 @@ import models.yolo_mobilenet  # noqa: F401
 st.markdown(CSS_STYLE, unsafe_allow_html=True)
 
 
+def _safe_mtime(f: os.PathLike) -> float | None:
+    """安全获取文件修改时间，失败返回 None"""
+    try:
+        return os.path.getmtime(f)
+    except (OSError, FileNotFoundError):
+        return None
+
+
 def _cleanup_old_files():
-    """清理过期文件，防止无限累积"""
+    """清理过期文件，防止无限累积。每个区块独立容错。"""
+
     # eval_results: 保留最近 10 个
     d = SCRIPT_DIR / "eval_results"
     if d.exists():
-        files = sorted(d.glob("*"), key=os.path.getmtime, reverse=True)
-        for f in files[10:]:
-            try:
-                f.unlink()
-            except OSError:
-                pass
-
-    # training.log: 超过 7 天删除
-    log_path = SCRIPT_DIR / "training.log"
-    if log_path.exists():
-        if _time.time() - os.path.getmtime(log_path) > 7 * 86400:
-            try:
-                log_path.unlink()
-            except OSError:
-                pass
-
-    # 上传目录: 清理 7 天前的文件
-    for subdir in ["models", "datasets", "model_configs", "datasets_extracted"]:
-        d = UPLOAD_DIR / subdir
-        if d.exists():
-            cutoff = _time.time() - 7 * 86400
-            for f in d.iterdir():
-                if os.path.getmtime(f) < cutoff:
-                    try:
-                        if f.is_dir():
-                            _shutil.rmtree(f)
-                        else:
-                            f.unlink()
-                    except OSError:
-                        pass
-
-    # runs/detect: 保留最近 5 次训练结果
-    runs_dir = SCRIPT_DIR / "runs" / "detect"
-    if runs_dir.exists():
-        subdirs = sorted(runs_dir.iterdir(), key=os.path.getmtime, reverse=True)
-        for sd in subdirs[5:]:
-            if sd.is_dir():
-                try:
-                    _shutil.rmtree(sd)
-                except OSError:
-                    pass
-
-    # runs/optimize: 清理 7 天前的导出文件
-    opt_dir = SCRIPT_DIR / "runs" / "optimize"
-    if opt_dir.exists():
-        cutoff = _time.time() - 7 * 86400
-        for f in opt_dir.iterdir():
-            if os.path.getmtime(f) < cutoff:
+        try:
+            files = sorted(d.glob("*"), key=lambda f: _safe_mtime(f) or 0, reverse=True)
+            for f in files[10:]:
                 try:
                     if f.is_dir():
                         _shutil.rmtree(f)
@@ -93,9 +57,74 @@ def _cleanup_old_files():
                         f.unlink()
                 except OSError:
                     pass
+        except Exception:
+            pass
 
-    # 清理滞留的临时 args JSON 文件
-    for tf in SCRIPT_DIR.glob("tmp*.json"):
+    # training.log: 超过 7 天删除
+    log_path = SCRIPT_DIR / "training.log"
+    if log_path.exists():
+        mtime = _safe_mtime(log_path)
+        if mtime is not None and _time.time() - mtime > 7 * 86400:
+            try:
+                log_path.unlink()
+            except OSError:
+                pass
+
+    # 上传目录: 递归清理 7 天前的所有文件
+    for subdir in ["models", "datasets", "model_configs", "datasets_extracted"]:
+        d = UPLOAD_DIR / subdir
+        if d.exists():
+            cutoff = _time.time() - 7 * 86400
+            try:
+                for f in sorted(d.rglob("*"), key=lambda x: _safe_mtime(x) or 0, reverse=True):
+                    mtime = _safe_mtime(f)
+                    if mtime is None or mtime >= cutoff:
+                        continue
+                    try:
+                        if f.is_dir():
+                            _shutil.rmtree(f)
+                        else:
+                            f.unlink()
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+
+    # runs/detect: 保留最近 5 次训练结果
+    runs_dir = SCRIPT_DIR / "runs" / "detect"
+    if runs_dir.exists():
+        try:
+            subdirs = sorted(runs_dir.iterdir(), key=lambda f: _safe_mtime(f) or 0, reverse=True)
+            for sd in subdirs[5:]:
+                if sd.is_dir():
+                    try:
+                        _shutil.rmtree(sd)
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+
+    # runs/optimize: 清理 7 天前的导出文件
+    opt_dir = SCRIPT_DIR / "runs" / "optimize"
+    if opt_dir.exists():
+        cutoff = _time.time() - 7 * 86400
+        try:
+            for f in opt_dir.iterdir():
+                mtime = _safe_mtime(f)
+                if mtime is None or mtime >= cutoff:
+                    continue
+                try:
+                    if f.is_dir():
+                        _shutil.rmtree(f)
+                    else:
+                        f.unlink()
+                except OSError:
+                    pass
+        except Exception:
+            pass
+
+    # 清理滞留的临时训练 args JSON 文件
+    for tf in SCRIPT_DIR.glob("_train_tmp_*.json"):
         try:
             tf.unlink()
         except OSError:
@@ -103,9 +132,11 @@ def _cleanup_old_files():
 
 
 def main():
-    if not st.session_state.get("_cleanup_done"):
+    # 定期重清理：每 30 分钟或首次访问
+    last_cleanup = st.session_state.get("_cleanup_ts", 0)
+    if _time.time() - last_cleanup > 1800:
         _cleanup_old_files()
-        st.session_state["_cleanup_done"] = True
+        st.session_state["_cleanup_ts"] = _time.time()
 
     datasets_count = len(scan_datasets())
     models_count = len(scan_models())

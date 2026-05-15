@@ -329,13 +329,10 @@ def run_benchmark(
         result["constraint"]["gpu_applied"] = False
 
     if cpu_cores > 0:
-        constrain_cpu_cores(cpu_cores)
-        result["constraint"]["cpu_affinity_ok"] = True
-        use_gpu = False  # CPU 核心限制 → 切 CPU 推理模式
+        use_gpu = False
         if device_type == "mps":
             result["notes"].append("MPS 设备使用 CPU 推理模式，性能不代表 GPU 加速效果")
-    else:
-        result["constraint"]["cpu_affinity_ok"] = True
+    result["constraint"]["cpu_affinity_ok"] = True
 
     # ── 准备推理 ──
     device_str = device_type if use_gpu else "cpu"
@@ -343,6 +340,8 @@ def run_benchmark(
     device = torch.device(device_str)
 
     try:
+        if cpu_cores > 0:
+            constrain_cpu_cores(cpu_cores)
         model.model.to(device)
         model.model.eval()
 

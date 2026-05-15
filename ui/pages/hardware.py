@@ -97,6 +97,13 @@ def page_hardware():
             except Exception as e:
                 st.error(f"模型分析失败: {e}")
                 st.session_state["hw_has_result"] = False
+            finally:
+                try:
+                    del model
+                except Exception:
+                    pass
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     if st.session_state.get("hw_has_result"):
         params_m = st.session_state["hw_params_m"]

@@ -28,7 +28,8 @@ def _check_and_set_fingerprint(key: str, data: bytes) -> bool:
 
 def _extract_dataset_zip(uploaded_zip) -> str | None:
     """解压数据集 zip，找到 data.yaml 并修复相对路径，返回 yaml 路径"""
-    extract_dir = UPLOAD_DIR / "datasets_extracted"
+    safe_name = Path(uploaded_zip.name).stem or "dataset"
+    extract_dir = UPLOAD_DIR / "datasets_extracted" / safe_name
     if extract_dir.exists():
         shutil.rmtree(extract_dir)
     extract_dir.mkdir(parents=True)
@@ -113,6 +114,8 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
                     st.session_state[f"{key_prefix}_last_ds"] = result
                     scan_datasets.clear()
                     return result
+                # 解压失败则清除指纹，允许用户修复 zip 后重新上传
+                st.session_state.pop(f"{key_prefix}_zip_processed", None)
             else:
                 persisted = st.session_state.get(f"{key_prefix}_last_ds", "")
                 if persisted and Path(persisted).exists():
@@ -128,22 +131,25 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
         if uploaded is not None:
             if _check_and_set_fingerprint(f"{key_prefix}_yaml_processed", uploaded.getbuffer()):
                 uploaded_path = save_uploaded_file(uploaded, "datasets")
-                ui_path_chip(uploaded_path, "已上传数据集配置")
-                parsed = parse_data_yaml(uploaded_path)
-                if parsed:
-                    missing = []
-                    for split_name in ["train", "val", "test"]:
-                        sp = parsed.get(split_name, "")
-                        if sp and not Path(sp).exists():
-                            missing.append(split_name)
-                    if missing:
-                        st.warning(
-                            f"数据集目录缺失: {', '.join(missing)}。"
-                            "建议将完整数据集打包为 zip 通过左侧 Tab 上传，"
-                            "或将图片目录手动放入 WSL 后使用下方「手动输入路径」。",
-                        )
-                st.session_state[f"{key_prefix}_last_ds"] = uploaded_path
-                return uploaded_path
+                if not uploaded_path:
+                    st.session_state.pop(f"{key_prefix}_yaml_processed", None)
+                else:
+                    ui_path_chip(uploaded_path, "已上传数据集配置")
+                    parsed = parse_data_yaml(uploaded_path)
+                    if parsed:
+                        missing = []
+                        for split_name in ["train", "val", "test"]:
+                            sp = parsed.get(split_name, "")
+                            if sp and not Path(sp).exists():
+                                missing.append(split_name)
+                        if missing:
+                            st.warning(
+                                f"数据集目录缺失: {', '.join(missing)}。"
+                                "建议将完整数据集打包为 zip 通过左侧 Tab 上传，"
+                                "或将图片目录手动放入 WSL 后使用下方「手动输入路径」。",
+                            )
+                    st.session_state[f"{key_prefix}_last_ds"] = uploaded_path
+                    return uploaded_path
             else:
                 persisted = st.session_state.get(f"{key_prefix}_last_ds", "")
                 if persisted and Path(persisted).exists():
@@ -164,6 +170,8 @@ def dataset_selector(key_prefix: str, label: str = "数据集"):
         )
 
     if manual:
+        if not Path(manual).exists():
+            st.warning(f"路径不存在: {manual}")
         st.session_state[f"{key_prefix}_last_ds"] = manual
         return manual
     if selected and selected != "-- 手动输入路径 --":
@@ -208,6 +216,8 @@ def model_selector(key_prefix: str, label: str = "模型权重", allow_upload: b
         manual = st.text_input("或手动输入路径", placeholder="best.pt 路径", key=f"{key_prefix}_mdl_manual")
 
     if manual:
+        if not Path(manual).exists():
+            st.warning(f"路径不存在: {manual}")
         st.session_state[f"{key_prefix}_last_mdl"] = manual
         return manual
     if selected and selected != "-- 手动输入路径 --":
@@ -232,9 +242,12 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
     if uploaded is not None:
         if _check_and_set_fingerprint(f"{key_prefix}_cfg_processed", uploaded.getbuffer()):
             uploaded_path = save_uploaded_file(uploaded, "model_configs")
-            ui_path_chip(uploaded_path, "已上传模型配置")
-            st.session_state[f"{key_prefix}_last_cfg"] = uploaded_path
-            return uploaded_path
+            if not uploaded_path:
+                st.session_state.pop(f"{key_prefix}_cfg_processed", None)
+            else:
+                ui_path_chip(uploaded_path, "已上传模型配置")
+                st.session_state[f"{key_prefix}_last_cfg"] = uploaded_path
+                return uploaded_path
         else:
             persisted = st.session_state.get(f"{key_prefix}_last_cfg", "")
             if persisted and Path(persisted).exists():
@@ -262,6 +275,8 @@ def model_config_selector(key_prefix: str, label: str = "模型配置"):
     with col2:
         manual_cfg = st.text_input("或手动输入", placeholder="模型 yaml 路径", key=f"{key_prefix}_cfg_manual")
     if manual_cfg:
+        if not Path(manual_cfg).exists():
+            st.warning(f"路径不存在: {manual_cfg}")
         model_yaml = manual_cfg
         st.session_state[f"{key_prefix}_last_cfg"] = manual_cfg
     if not model_yaml:

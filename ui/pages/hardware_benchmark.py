@@ -11,6 +11,7 @@ from engine.benchmark import (
     run_benchmark,
     generate_charts,
 )
+from ui.components import ui_section
 
 
 def get_custom_profiles_from_session(st) -> dict:
@@ -47,7 +48,7 @@ def render_benchmark_ui(
 ) -> None:
     """渲染 Live Benchmark Tab — 预设 + 手动微调 + 运行 + 结果 + 导出"""
 
-    st.markdown("##### 当前设备")
+    ui_section("当前设备", "当前运行环境的 GPU / CPU 信息。")
     has_gpu = device_info_local["available"]
     device_type = device_info_local.get("device_type", "cpu")
 
@@ -66,7 +67,7 @@ def render_benchmark_ui(
     max_cores = get_cpu_core_count()
 
     # ── 预设选择 ──
-    st.markdown("##### 快捷预设")
+    ui_section("快捷预设", "选择目标硬件预设，自动填充下方约束参数。")
     custom_profiles = get_custom_profiles_from_session(st)
     all_names = get_preset_names() + list(custom_profiles.keys())
 
@@ -91,7 +92,7 @@ def render_benchmark_ui(
     if "hw_cpu_limit" not in st.session_state:
         st.session_state["hw_cpu_limit"] = 0
 
-    st.markdown("##### 约束参数 (可手动微调)")
+    ui_section("约束参数", "手动微调 GPU 显存上限和 CPU 核心数。")
     col1, col2 = st.columns(2)
 
     gpu_limit = col1.slider(
@@ -126,7 +127,7 @@ def render_benchmark_ui(
     st.caption(f"生效约束: {' | '.join(constraints)}")
 
     # ── 适用于当前约束的设备列表 ──
-    st.markdown("##### 适用于当前约束的目标设备")
+    ui_section("匹配设备", "基于当前约束条件，筛选可运行的目标设备。")
     matching = []
     for name in all_names:
         p = get_preset(name) or custom_profiles.get(name)
@@ -176,8 +177,6 @@ def render_benchmark_ui(
                     st.rerun()
 
     # ── 运行 Benchmark ──
-    st.markdown("---")
-
     cur_bench_sig = f"{model_path}:{imgsz}:{batch}:{fp16}:{gpu_limit}:{cpu_limit}"
     if st.session_state.get("engine/benchmark_sig") != cur_bench_sig:
         st.session_state["hw_has_bench_result"] = False
@@ -201,8 +200,7 @@ def render_benchmark_ui(
     # ── 展示结果 ──
     if st.session_state.get("hw_has_bench_result"):
         r = st.session_state["engine/benchmark_result"]
-        st.markdown("---")
-        st.markdown("##### Benchmark 结果")
+        ui_section("Benchmark 结果", "受限环境下模型推理性能指标。", "RESULT")
 
         if r["oom"]:
             st.error(f"OOM: {r['oom_message'][:300]}")

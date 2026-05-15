@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -10,10 +11,159 @@ from ui import SCRIPT_DIR
 from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import dataset_selector, model_config_selector
 from ui.scanner import scan_models, get_compute_devices
+from engine.training_monitor import parse_training_log
 
-def page_training():
+
+@st.fragment(run_every=3)
+def _training_dashboard():
+    """每 3 秒局部刷新训练进度区，进程结束后自行展示完成状态。"""
     import signal as _signal
 
+    log_path = st.session_state.get("_train_log_path", "")
+    train_pid = st.session_state.get("_train_pid", 0)
+    train_project = st.session_state.get("_train_project_name", "")
+
+    # ── 训练已结束（由本 fragment 或外部设置）—— 展示完成/错误 ──
+    if not st.session_state.get("_train_running", True):
+        _render_completion(log_path, train_pid, train_project)
+        return
+
+    process_alive = False
+    if train_pid:
+        try:
+            os.kill(train_pid, 0)
+            process_alive = True
+        except (OSError, ProcessLookupError):
+            process_alive = False
+            if "_train_exit_code" not in st.session_state:
+                try:
+                    _, status = os.waitpid(train_pid, os.WNOHANG)
+                    st.session_state["_train_exit_code"] = os.WEXITSTATUS(status) if os.WIFEXITED(status) else -status
+                except OSError:
+                    st.session_state["_train_exit_code"] = -1
+
+    if not process_alive:
+        st.session_state["_train_running"] = False
+        if "_train_exit_code" not in st.session_state:
+            st.session_state["_train_exit_code"] = 0
+        if "_train_was_stopped" not in st.session_state:
+            st.session_state.setdefault("_train_was_stopped", False)
+        st.rerun()  # fragment scope: immediately re-render to show completion
+        return
+
+    st.session_state["training_status"] = "训练中"
+
+    start_ts = st.session_state.get("_train_start_time", time.time())
+    hint_epochs = st.session_state.get("_train_total_epochs", 0)
+    prog = parse_training_log(log_path, start_time=start_ts, total_epochs_hint=hint_epochs)
+
+    # ── 整体 Epoch 进度条 ──
+    total_ep = prog["total_epochs"] or hint_epochs or 1
+    overall_pct = (prog["current_epoch"] - 1 + prog["epoch_pct"] / 100) / total_ep
+    overall_pct = max(0.0, min(1.0, overall_pct))
+    status_label = "正在扫描数据集..." if prog["status"] == "scanning" else "训练中"
+    st.progress(
+        overall_pct,
+        text=f"{status_label} — Epoch {prog['current_epoch']}/{total_ep} ({overall_pct * 100:.1f}%)",
+    )
+
+    # ── 顶部指标卡 ──
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("预计剩余时间", prog["eta_str"] or "计算中...")
+    c2.metric("GPU 显存", prog["gpu_mem"] or "-")
+    c3.metric("训练速度", prog["speed"] or "-")
+    c4.metric("当前 Epoch 进度", f"{prog['epoch_pct']:.0f}%")
+
+    # ── 训练损失 ──
+    if prog["box_loss"] is not None:
+        st.caption("训练损失")
+        l1, l2, l3 = st.columns(3)
+        l1.metric("Box Loss", f"{prog['box_loss']:.4f}")
+        l2.metric("Cls Loss", f"{prog['cls_loss']:.4f}")
+        l3.metric("DFL Loss", f"{prog['dfl_loss']:.4f}")
+
+    # ── 验证指标 ──
+    if prog["map50"] is not None:
+        st.caption("最新验证指标")
+        v1, v2, v3, v4 = st.columns(4)
+        v1.metric("mAP50", f"{prog['map50']:.3f}")
+        v2.metric("mAP50-95", f"{prog['map50_95']:.3f}")
+        v3.metric("Precision", f"{prog['precision']:.3f}")
+        v4.metric("Recall", f"{prog['recall']:.3f}")
+
+    # ── 停止按钮 + 原始日志 ──
+    col_stop, col_info = st.columns([1, 3])
+    with col_stop:
+        if st.button("停止训练", type="primary", key="tr_stop_btn"):
+            try:
+                os.killpg(train_pid, _signal.SIGTERM)
+            except OSError:
+                pass
+            time.sleep(2)
+            try:
+                os.killpg(train_pid, _signal.SIGKILL)
+            except OSError:
+                pass
+            st.session_state["_train_running"] = False
+            st.session_state["_train_was_stopped"] = True
+            st.rerun()
+    with col_info:
+        st.caption(f"PID: {train_pid} | 输出目录: {train_project}")
+
+    with st.expander("原始日志", expanded=False):
+        st.code(prog.get("raw_tail", "") or "(等待训练输出...)")
+
+
+def _render_completion(log_path: str, train_pid: int, train_project: str):
+    """在 fragment 内渲染训练完成/错误/停止结果。"""
+    result_dir = SCRIPT_DIR / "runs" / "detect" / train_project
+    st.session_state.pop("_train_pid", None)  # 防 PID 重用误判
+    st.session_state.pop("_train_start_time", None)
+    args_file_path = st.session_state.pop("_train_args_file", "")
+    if args_file_path and Path(args_file_path).exists():
+        try:
+            Path(args_file_path).unlink()
+        except OSError:
+            pass
+
+    exit_code = st.session_state.pop("_train_exit_code", None)
+    was_stopped = st.session_state.pop("_train_was_stopped", False)
+
+    if was_stopped:
+        st.session_state["training_status"] = "已手动停止"
+        st.warning("训练已被用户手动停止")
+    elif exit_code is not None and exit_code != 0:
+        st.session_state["training_status"] = f"训练异常退出 (code={exit_code})"
+        st.error(
+            f"训练进程异常退出，退出码: {exit_code}。"
+            "请检查日志排查是否为 OOM / 数据集路径错误 / 模型配置不兼容。"
+        )
+        if log_path and Path(log_path).exists():
+            with open(log_path) as f:
+                tail = "".join(f.readlines()[-20:])
+            st.text_area("日志末尾", tail, height=200)
+    else:
+        st.session_state["training_status"] = "训练完成"
+        st.session_state["last_train_dir"] = str(result_dir)
+        st.session_state["_training_just_finished"] = True
+        st.success(f"训练完成！结果保存在 {result_dir}")
+        scan_models.clear()
+        results_img = result_dir / "results.png"
+        if results_img.exists():
+            ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
+            st.image(str(results_img), caption="训练曲线", use_container_width=True)
+            ts_img = datetime.now().strftime("%Y%m%d_%H%M%S")
+            with open(results_img, "rb") as f:
+                st.download_button(
+                    "下载训练曲线 (PNG)", f.read(),
+                    f"results_{ts_img}.png", "image/png",
+                    key="dl_train_results", use_container_width=True,
+                )
+
+    st.caption("点击任意位置刷新页面返回配置模式。")
+
+
+def page_training():
     ui_page_header(
         "训练管理",
         "配置数据集、模型结构和关键超参数，并直接启动 YOLO 训练任务。",
@@ -21,111 +171,10 @@ def page_training():
         ["YOLOv11", "MobileNetV3", "Slim-Neck", "P2 小目标"],
     )
 
-    # ── 训练运行中：展示实时日志 + 停止按钮 ──
-    train_running = st.session_state.get("_train_running", False)
-    if train_running:
-        log_path = st.session_state.get("_train_log_path", "")
-        train_pid = st.session_state.get("_train_pid", 0)
-        train_project = st.session_state.get("_train_project_name", "")
-
-        # 检查进程是否还活着，并捕获退出码
-        process_alive = False
-        if train_pid:
-            try:
-                os.kill(train_pid, 0)
-                process_alive = True
-            except (OSError, ProcessLookupError):
-                process_alive = False
-                if "_train_exit_code" not in st.session_state:
-                    try:
-                        _, exit_status = os.waitpid(train_pid, os.WNOHANG)
-                        st.session_state["_train_exit_code"] = exit_status if exit_status != 0 else exit_status
-                    except OSError:
-                        st.session_state["_train_exit_code"] = -1
-
-        if process_alive:
-            st.session_state["training_status"] = "训练中"
-            st.warning("训练进行中，可通过下方按钮停止。页面每 3 秒自动刷新。")
-
-            # 显示最新日志
-            if log_path and Path(log_path).exists():
-                with open(log_path) as f:
-                    log_content = f.read()
-                st.code(log_content[-2500:] or "(等待训练输出...)")
-
-            col_stop, col_info = st.columns([1, 3])
-            with col_stop:
-                if st.button("停止训练", type="primary", key="tr_stop_btn"):
-                    try:
-                        os.killpg(train_pid, _signal.SIGTERM)
-                    except OSError:
-                        pass
-                    import time as _t2
-                    _t2.sleep(2)
-                    try:
-                        os.killpg(train_pid, _signal.SIGKILL)
-                    except OSError:
-                        pass
-                    st.session_state["_train_running"] = False
-                    st.session_state["training_status"] = "已手动停止"
-                    st.session_state["_train_was_stopped"] = True
-                    st.rerun()
-            with col_info:
-                st.caption(f"PID: {train_pid} | 输出目录: {train_project}")
-
-            import time as _time
-            _time.sleep(3)
-            st.rerun()
-            return
-        else:
-            # 进程已结束
-            st.session_state["_train_running"] = False
-            result_dir = SCRIPT_DIR / "runs" / "detect" / train_project
-            args_file_path = st.session_state.pop("_train_args_file", "")
-            if args_file_path and Path(args_file_path).exists():
-                try:
-                    Path(args_file_path).unlink()
-                except OSError:
-                    pass
-
-            # 获取训练进程退出码
-            exit_code = st.session_state.pop("_train_exit_code", None)
-            if exit_code is None:
-                try:
-                    exit_code = os.waitpid(train_pid, os.WNOHANG)[1]
-                except OSError:
-                    exit_code = -1
-
-            if st.session_state.pop("_train_was_stopped", False):
-                st.session_state["training_status"] = "已手动停止"
-                st.warning("训练已被用户手动停止")
-            elif exit_code != 0:
-                st.session_state["training_status"] = f"训练异常退出 (code={exit_code})"
-                st.error(
-                    f"训练进程异常退出，退出码: {exit_code}。"
-                    "请检查日志排查是否为 OOM / 数据集路径错误 / 模型配置不兼容。"
-                )
-                if log_path and Path(log_path).exists():
-                    with open(log_path) as f:
-                        tail = "".join(f.readlines()[-20:])
-                    st.text_area("日志末尾", tail, height=200)
-            else:
-                st.session_state["training_status"] = "训练完成"
-                st.session_state["last_train_dir"] = str(result_dir)
-                st.session_state["_training_just_finished"] = True
-                st.success(f"训练完成！结果保存在 {result_dir}")
-                scan_models.clear()
-                results_img = result_dir / "results.png"
-                if results_img.exists():
-                    ui_section("训练曲线", "本次训练生成的结果图。", "RESULT")
-                    st.image(str(results_img), caption="训练曲线", use_container_width=True)
-                    ts_img = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    with open(results_img, "rb") as f:
-                        st.download_button("下载训练曲线 (PNG)", f.read(),
-                                           f"results_{ts_img}.png", "image/png",
-                                           key="dl_train_results", use_container_width=True)
-            st.rerun()
-            return
+    # ── 训练运行中：交由 fragment 全权处理（含完成/停止展示）──
+    if st.session_state.get("_train_running"):
+        _training_dashboard()
+        return
 
     # ── 正常配置表单 ──
     # 数据集选择
@@ -149,24 +198,54 @@ def page_training():
 
     ui_path_chip(model_yaml, "模型配置")
 
-    ui_section("超参数", "保持默认值即可跑通基线，需要微调时再改 batch、imgsz 和学习率。", "PARAMS")
+    ui_section("超参数", "调整滑块快速配置训练策略，也可手动微调每个参数。", "PARAMS")
 
-    auto_epochs = st.checkbox("自动确定最佳 Epoch（根据 Patience 早停）", value=True,
-                              help="开启后自动设置较高 epoch 上限，靠 Patience 早停自动收敛")
+    # ── 训练策略预设 ──
+    _PRESETS = {
+        "速度优先": {"auto_epochs": False, "epochs": 50,  "imgsz": 320, "batch": 16, "lr0": 0.01,  "close_mosaic": 10, "patience": 20},
+        "偏速度":   {"auto_epochs": True,  "epochs": 200, "imgsz": 480, "batch": 12, "lr0": 0.01,  "close_mosaic": 15, "patience": 35},
+        "均衡":     {"auto_epochs": True,  "epochs": 300, "imgsz": 640, "batch": 8,  "lr0": 0.01,  "close_mosaic": 20, "patience": 50},
+        "偏质量":   {"auto_epochs": True,  "epochs": 300, "imgsz": 800, "batch": 6,  "lr0": 0.007, "close_mosaic": 25, "patience": 65},
+        "质量优先": {"auto_epochs": True,  "epochs": 300, "imgsz": 960, "batch": 4,  "lr0": 0.005, "close_mosaic": 30, "patience": 80},
+    }
+
+    def _apply_preset():
+        p = _PRESETS.get(st.session_state.get("_tr_preset_label", "均衡"), _PRESETS["均衡"])
+        for k, v in p.items():
+            st.session_state[f"_tr_{k}"] = v
+
+    preset_label = st.select_slider(
+        "训练策略",
+        options=list(_PRESETS.keys()),
+        value="均衡",
+        key="_tr_preset_label",
+        on_change=_apply_preset,
+    )
+
+    # 首次加载时初始化 session_state 默认值
+    for k, v in _PRESETS["均衡"].items():
+        st.session_state.setdefault(f"_tr_{k}", v)
+
+    auto_epochs = st.checkbox(
+        "自动确定最佳 Epoch（根据 Patience 早停）",
+        value=st.session_state.get("_tr_auto_epochs", True),
+        key="_tr_auto_epochs",
+        help="开启后自动设置较高 epoch 上限，靠 Patience 早停自动收敛",
+    )
 
     c1, c2, c3, c4 = st.columns(4)
     if auto_epochs:
-        epochs = 300
+        epochs = st.session_state.get("_tr_epochs", 300)
         c1.metric("Epochs (自动)", f"{epochs}（上限）")
     else:
-        epochs = c1.number_input("Epochs (手动)", 1, 500, 150, 10)
-    batch = c2.number_input("Batch Size", 1, 64, 8, 2)
-    imgsz = c3.number_input("Image Size", 320, 1280, 640, 32)
-    lr0 = c4.number_input("Learning Rate", 0.0001, 0.1, 0.01, format="%.4f")
+        epochs = c1.number_input("Epochs (手动)", min_value=1, max_value=500, key="_tr_epochs")
+    batch = c2.number_input("Batch Size", min_value=1, max_value=64, key="_tr_batch")
+    imgsz = c3.number_input("Image Size", min_value=320, max_value=1280, step=32, key="_tr_imgsz")
+    lr0 = c4.number_input("Learning Rate", min_value=0.0001, max_value=0.1, format="%.4f", key="_tr_lr0")
 
     c5, c6, c7 = st.columns(3)
-    close_mosaic = c5.number_input("Close Mosaic", 0, 50, 20, 5, help="在第 N 个 epoch 关闭 mosaic")
-    patience = c6.number_input("Patience (早停)", 10, 200, 50, 10, help="连续 N 个 epoch 无提升则自动停止")
+    close_mosaic = c5.number_input("Close Mosaic", min_value=0, max_value=50, step=5, key="_tr_close_mosaic", help="在第 N 个 epoch 关闭 mosaic")
+    patience = c6.number_input("Patience (早停)", min_value=10, max_value=200, step=10, key="_tr_patience", help="连续 N 个 epoch 无提升则自动停止")
     project_name = c7.text_input("输出目录名", value="fire_mobilenet_slimneck")
 
     ui_section("训练设备", "检查当前环境是否有 GPU（CUDA / MPS），并手动选择本次训练使用的设备。", "DEVICE")
@@ -246,7 +325,7 @@ def page_training():
             "patience": patience,
             "script_dir": str(SCRIPT_DIR),
         }
-        args_file = _tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, dir=str(SCRIPT_DIR))
+        args_file = _tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="_train_tmp_", delete=False, dir=str(SCRIPT_DIR))
         args_file.write(_json.dumps(train_args))
         args_file.close()
 
@@ -275,12 +354,17 @@ def page_training():
         )
         log_file.close()
 
+        st.session_state.pop("_train_exit_code", None)   # 清除上次训练的退出码
+        st.session_state.pop("_train_was_stopped", None)
+        st.session_state.pop("last_train_dir", None)     # 清除上次训练结果
         st.session_state["_train_running"] = True
         st.session_state["_train_pid"] = process.pid
         st.session_state["_train_log_path"] = log_path
         st.session_state["_train_project_name"] = project_name
         st.session_state["_train_args_file"] = args_file.name
         st.session_state["_train_was_stopped"] = False
+        st.session_state["_train_start_time"] = time.time()
+        st.session_state["_train_total_epochs"] = epochs
         st.session_state["training_status"] = f"训练中 ({selected_device})"
         st.rerun()
 

@@ -62,9 +62,12 @@ def page_evaluation():
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("mAP@50", f"{eval_result['map50']:.4f}")
             c2.metric("mAP@50-95", f"{eval_result['map50_95']:.4f}")
-            c3.metric("Precision", f"{eval_result['precision']:.4f}" if eval_result['precision'] else "—")
-            c4.metric("Recall", f"{eval_result['recall']:.4f}" if eval_result['recall'] else "—")
-            c5.metric("F1", f"{2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6):.4f}")
+            p_val = eval_result['precision']
+            r_val = eval_result['recall']
+            c3.metric("Precision", f"{p_val:.4f}" if p_val is not None else "—")
+            c4.metric("Recall", f"{r_val:.4f}" if r_val is not None else "—")
+            f1 = 2 * p_val * r_val / (p_val + r_val) if (p_val is not None and r_val is not None and (p_val + r_val) > 0) else 0
+            c5.metric("F1", f"{f1:.4f}")
 
             # 第二行：模型复杂度
             ui_section("模型复杂度", "参数量和估算计算量。", "COST")
@@ -294,8 +297,6 @@ def page_evaluation():
     if st.session_state.get("cmp_has_result"):
         comparison_data = st.session_state["cmp_data"]
         selected_names = st.session_state["cmp_names"]
-
-        st.markdown("---")
     else:
         return
 
@@ -303,16 +304,15 @@ def page_evaluation():
 
     col_title, col_clear = st.columns([4, 1])
     with col_title:
-            st.markdown("##### Comparison Results")
+        ui_section("对比结果", "多模型在同一验证集上的横向对比。", "RESULT")
     with col_clear:
-            if st.button("Clear Results", key="eval_cmp_clear"):
-                st.session_state["cmp_has_result"] = False
-                st.rerun()
+        if st.button("清除结果", key="eval_cmp_clear"):
+            st.session_state["cmp_has_result"] = False
+            st.rerun()
 
     df = pd.DataFrame(comparison_data)
 
-    # 对比表格
-    ui_section("Metrics Table", "Side-by-side comparison on the same evaluation set.", "TABLE")
+    ui_section("指标对比", "关键检测指标并行展示。", "TABLE")
     st.dataframe(
             df.style.format({
                 "mAP@50": "{:.4f}", "mAP@50-95": "{:.4f}",
@@ -323,11 +323,10 @@ def page_evaluation():
     )
     # 表格单独下载 CSV
     csv_buf = df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download CSV", csv_buf, f"metrics_{ts}.csv", "text/csv",
+    st.download_button("下载 CSV", csv_buf, f"metrics_{ts}.csv", "text/csv",
                         key="dl_csv", use_container_width=True)
 
-    # Streamlit 内置柱形图
-    ui_section("Detection Accuracy", "mAP@50 vs mAP@50-95 across models.", "CHART")
+    ui_section("检测精度", "mAP@50 与 mAP@50-95 模型间对比。", "CHART")
     chart_data_map = pd.DataFrame({
             "Model": selected_names[:len(comparison_data)],
             "mAP@50": [d["mAP@50"] for d in comparison_data],
@@ -350,10 +349,10 @@ def page_evaluation():
     fig_map.savefig(buf_map, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     buf_map.seek(0)
     plt.close(fig_map)
-    st.download_button("Download Chart (PNG)", buf_map, f"mAP_{ts}.png", "image/png",
+    st.download_button("下载图表 (PNG)", buf_map, f"mAP_{ts}.png", "image/png",
                         key="dl_map", use_container_width=True)
 
-    ui_section("Precision / Recall / F1", "Precision, recall, and F1 score.", "CHART")
+    ui_section("精确率 / 召回率 / F1", "三指标在各模型上的对比。", "CHART")
     chart_data_pr = pd.DataFrame({
             "Model": selected_names[:len(comparison_data)],
             "Precision": [d["Precision"] for d in comparison_data],
@@ -379,11 +378,10 @@ def page_evaluation():
     fig_prf.savefig(buf_prf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     buf_prf.seek(0)
     plt.close(fig_prf)
-    st.download_button("Download Chart (PNG)", buf_prf, f"PRF_{ts}.png", "image/png",
+    st.download_button("下载图表 (PNG)", buf_prf, f"PRF_{ts}.png", "image/png",
                         key="dl_prf", use_container_width=True)
 
-    # Matplotlib 水平条形图
-    ui_section("Complexity Comparison", "Lower is better for edge deployment.", "COST")
+    ui_section("模型复杂度", "参数量与计算量对比，越低越适合边缘部署。", "COST")
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, max(3, len(comparison_data) * 0.6)))
     names = selected_names[:len(comparison_data)]
     params_vals = [d["Params (M)"] for d in comparison_data]
@@ -405,11 +403,11 @@ def page_evaluation():
     fig.savefig(buf_cost, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     buf_cost.seek(0)
     plt.close(fig)
-    st.download_button("Download Chart (PNG)", buf_cost, f"complexity_{ts}.png", "image/png",
+    st.download_button("下载图表 (PNG)", buf_cost, f"complexity_{ts}.png", "image/png",
                         key="dl_complexity", use_container_width=True)
 
     # ── 导出（PNG + PDF）──
-    ui_section("Export Report", "Download comparison charts and tables as PNG or PDF.", "EXPORT")
+    ui_section("导出报告", "下载对比图表与表格，支持 PNG 和 PDF 格式。", "EXPORT")
 
     n = len(comparison_data)
     names_list = [d["Model"] for d in comparison_data]
@@ -470,7 +468,7 @@ def page_evaluation():
     with col_png:
             fname_png = f"compare_{ts}.png"
             st.download_button(
-                label="Download PNG Report",
+                label="下载报告 PNG",
                 data=buf_png,
                 file_name=fname_png,
                 mime="image/png",
@@ -577,7 +575,7 @@ def page_evaluation():
     with col_pdf:
             fname_pdf = f"compare_{ts}.pdf"
             st.download_button(
-                label="Download PDF Report",
+                label="下载报告 PDF",
                 data=buf_pdf,
                 file_name=fname_pdf,
                 mime="application/pdf",
