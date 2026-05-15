@@ -1,7 +1,6 @@
 """页面: Optimization"""
 
 import os
-import json
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -11,6 +10,7 @@ from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import model_selector
 from ui.scanner import load_model_cached
 from ui.image_utils import HARDWARE_PROFILES
+from ui.runtime import clear_export_timestamp, export_timestamp, json_download, reset_state_on_change
 
 def page_optimization():
     ui_page_header(
@@ -35,7 +35,20 @@ def page_optimization():
     # 目标硬件
     ui_section("目标硬件", "不同硬件支持的导出格式和推荐输入尺寸不同。", "DEVICE")
     hw_options = list(HARDWARE_PROFILES.keys())
-    target_hw = st.selectbox("目标硬件", hw_options, key="opt_hw")
+    imgsz_options = [160, 224, 320, 416, 512]
+
+    def _apply_hardware_defaults():
+        selected_hw = st.session_state.get("opt_hw", hw_options[0])
+        selected_profile = HARDWARE_PROFILES[selected_hw]
+        st.session_state["opt_fp16"] = bool(selected_profile["supports_fp16"])
+        st.session_state["opt_int8"] = bool(selected_profile["supports_int8"] and not selected_profile["supports_fp16"])
+        st.session_state["opt_onnx"] = False
+        st.session_state["opt_imgsz"] = min(
+            imgsz_options,
+            key=lambda x: abs(x - selected_profile["recommended_imgsz"]),
+        )
+
+    target_hw = st.selectbox("目标硬件", hw_options, key="opt_hw", on_change=_apply_hardware_defaults)
     hw = HARDWARE_PROFILES[target_hw]
 
     # 显示硬件信息
@@ -74,13 +87,20 @@ def page_optimization():
         st.caption("降低 imgsz 直接减少计算量")
         reduced_imgsz = st.selectbox(
             "目标 imgsz",
-            [160, 224, 320, 416, 512],
-            index=[160, 224, 320, 416, 512].index(
-                min([160, 224, 320, 416, 512], key=lambda x: abs(x - hw["recommended_imgsz"]))
+            imgsz_options,
+            index=imgsz_options.index(
+                min(imgsz_options, key=lambda x: abs(x - hw["recommended_imgsz"]))
             ),
             key="opt_imgsz",
         )
         st.caption(f"原 640 → {reduced_imgsz}，计算量约降至 {(reduced_imgsz/640)**2:.0%}")
+
+    opt_sig = f"{target_model}:{target_hw}:{export_fp16}:{export_int8}:{export_onnx}:{reduced_imgsz}"
+    reset_state_on_change(
+        "opt_sig",
+        opt_sig,
+        ["opt_results", "opt_model_size", "opt_has_result", "opt_export_ts"],
+    )
 
     ui_section("执行", "导出产物会写入 Ultralytics 返回的模型路径。", "EXPORT")
 
@@ -137,6 +157,7 @@ def page_optimization():
         st.session_state["opt_results"] = results
         st.session_state["opt_model_size"] = model_size_mb
         st.session_state["opt_has_result"] = bool(results)
+        clear_export_timestamp("opt_export_ts")
 
     if st.session_state.get("opt_has_result"):
         results = st.session_state["opt_results"]
@@ -151,22 +172,18 @@ def page_optimization():
 
         # 导出优化汇总
         ui_section("导出优化报告", "将优化结果导出为 JSON 汇总。", "EXPORT")
-        import json as _json
-        import io as _io
+        ts = export_timestamp("opt_export_ts")
+        report_time = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
         report = {
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "date": report_time,
             "source_model": target_model,
             "original_size_mb": model_size_mb,
             "target_hardware": target_hw,
             "results": [{"format": r[0], "path": r[1], "size_mb": r[2]} for r in results],
         }
-        buf = _io.BytesIO()
-        buf.write(_json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8"))
-        buf.seek(0)
+        download = json_download(report, f"optimization_{ts}.json")
         st.download_button(
-            label="下载优化报告 (JSON)", data=buf,
-            file_name=f"optimization_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
+            label="下载优化报告 (JSON)", data=download.data,
+            file_name=download.file_name,
+            mime=download.mime,
         )
-
-

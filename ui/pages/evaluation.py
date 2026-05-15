@@ -1,7 +1,5 @@
 """页面: Evaluation"""
 
-import os
-import hashlib
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
@@ -17,6 +15,7 @@ from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import model_selector, dataset_selector
 from ui.scanner import scan_models, save_uploaded_file
 from ui.image_utils import get_model_info, run_eval
+from ui.runtime import clear_export_timestamp, export_timestamp, file_fingerprint, reset_state_on_change
 
 def page_evaluation():
     ui_page_header(
@@ -33,6 +32,18 @@ def page_evaluation():
         ui_section("评估输入", "选择一个模型权重和一个 data.yaml 作为评估对象。", "SINGLE")
         model_path = model_selector("eval", "模型权重")
         yaml_path = dataset_selector("eval", "评估数据集")
+        reset_state_on_change(
+            "eval_single_sig",
+            f"{model_path}|{yaml_path}",
+            [
+                "eval_has_result",
+                "eval_result",
+                "eval_model_info",
+                "eval_model_path",
+                "eval_yaml_path",
+                "eval_single_export_ts",
+            ],
+        )
 
         if not model_path or not Path(model_path).exists():
             st.info("请选择已训练的 .pt 模型")
@@ -46,6 +57,7 @@ def page_evaluation():
                     st.session_state["eval_model_path"] = model_path
                     st.session_state["eval_yaml_path"] = yaml_path
                     st.session_state["eval_has_result"] = True
+                    clear_export_timestamp("eval_single_export_ts")
                 except Exception as e:
                     st.error(f"评估失败: {e}")
                     st.session_state["eval_has_result"] = False
@@ -92,6 +104,8 @@ def page_evaluation():
 
             # 导出评估结果
             ui_section("导出结果", "生成含全部评估指标和曲线的汇总图片。", "EXPORT")
+            ts_eval = export_timestamp("eval_single_export_ts")
+            report_time = datetime.strptime(ts_eval, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
 
             f1_val = 2 * eval_result['precision'] * eval_result['recall'] / (eval_result['precision'] + eval_result['recall'] + 1e-6)
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -104,7 +118,7 @@ def page_evaluation():
             info_lines = [
                 f"Model: {Path(model_path).name}",
                 f"Dataset: {Path(yaml_path).name}",
-                f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Date: {report_time}",
             ]
             for i, line in enumerate(info_lines):
                 ax.text(0.05, 0.80 - i * 0.05, line, transform=ax.transAxes,
@@ -153,7 +167,7 @@ def page_evaluation():
             buf.seek(0)
             plt.close(fig)
 
-            fname = f"eval_{Path(model_path).stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            fname = f"eval_{Path(model_path).stem}_{ts_eval}.png"
             st.download_button(label="下载评估报告 (PNG)", data=buf, file_name=fname, mime="image/png")
 
             eval_dir = (SCRIPT_DIR / "eval_results")
@@ -183,7 +197,7 @@ def page_evaluation():
         )
         if uploaded_files:
             for uf in uploaded_files:
-                fp = hashlib.sha256(uf.getbuffer()).hexdigest()
+                fp = file_fingerprint(uf)
                 upload_key = f"eval_cmp_uploaded_{fp[:12]}"
                 if upload_key not in st.session_state:
                     saved_path = save_uploaded_file(uf, "models")
@@ -251,10 +265,13 @@ def page_evaluation():
             st.info("请选择评估数据集")
 
         # 签名跟踪：输入变化时自动清除旧结果
-        cmp_sig = f"{yaml_path}|{','.join(sorted(selected_labels))}"
-        if st.session_state.get("cmp_sig") != cmp_sig:
-            st.session_state["cmp_has_result"] = False
-            st.session_state["cmp_sig"] = cmp_sig
+        selected_sig_paths = [available_models.get(label, label) for label in selected_labels]
+        cmp_sig = f"{yaml_path}|{','.join(sorted(selected_sig_paths))}"
+        reset_state_on_change(
+            "cmp_sig",
+            cmp_sig,
+            ["cmp_has_result", "cmp_data", "cmp_names", "cmp_yaml", "cmp_export_ts"],
+        )
 
         if compare_ready and st.button("开始对比", type="primary", key="eval_compare_btn"):
             selected_paths = [available_models[l] for l in selected_labels if l in available_models]
@@ -288,6 +305,7 @@ def page_evaluation():
                 st.session_state["cmp_names"] = selected_names[:len(comparison_data)]
                 st.session_state["cmp_yaml"] = yaml_path
                 st.session_state["cmp_has_result"] = True
+                clear_export_timestamp("cmp_export_ts")
                 st.rerun()
             else:
                 st.error("At least 2 models must succeed for comparison")
@@ -300,7 +318,8 @@ def page_evaluation():
     else:
         return
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = export_timestamp("cmp_export_ts")
+    report_time = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
 
     col_title, col_clear = st.columns([4, 1])
     with col_title:
@@ -308,6 +327,7 @@ def page_evaluation():
     with col_clear:
         if st.button("清除结果", key="eval_cmp_clear"):
             st.session_state["cmp_has_result"] = False
+            clear_export_timestamp("cmp_export_ts")
             st.rerun()
 
     df = pd.DataFrame(comparison_data)
@@ -483,7 +503,7 @@ def page_evaluation():
             ax_p1.axis("off")
             ax_p1.text(0.5, 0.95, "Model Comparison Report", transform=ax_p1.transAxes,
                       fontsize=20, fontweight="bold", ha="center", va="top")
-            ax_p1.text(0.5, 0.88, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            ax_p1.text(0.5, 0.88, f"Date: {report_time}",
                       transform=ax_p1.transAxes, fontsize=10, ha="center", va="top",
                       fontfamily="monospace", color="#555555")
 
@@ -568,7 +588,7 @@ def page_evaluation():
             d = pdf.infodict()
             d["Title"] = "Model Comparison Report"
             d["Author"] = "Fire & Smoke Detection Platform"
-            d["CreationDate"] = datetime.now()
+            d["CreationDate"] = datetime.strptime(ts, "%Y%m%d_%H%M%S")
 
     buf_pdf.seek(0)
 
@@ -589,5 +609,3 @@ def page_evaluation():
     buf_pdf.seek(0)
     (eval_dir / fname_pdf).write_bytes(buf_pdf.getvalue())
     st.caption(f"Auto-saved to {eval_dir.resolve()}")
-
-

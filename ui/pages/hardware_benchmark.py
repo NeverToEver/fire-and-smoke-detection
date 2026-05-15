@@ -1,7 +1,5 @@
 """受限环境 Benchmark UI 组件 — 预设选择、约束配置、运行、结果展示、导出"""
 
-import io
-import json
 from datetime import datetime
 
 from engine.benchmark import (
@@ -12,6 +10,7 @@ from engine.benchmark import (
     generate_charts,
 )
 from ui.components import ui_section
+from ui.runtime import clear_export_timestamp, export_timestamp, json_download, reset_state_on_change
 
 
 def get_custom_profiles_from_session(st) -> dict:
@@ -91,6 +90,8 @@ def render_benchmark_ui(
         st.session_state["hw_gpu_limit"] = 0.0
     if "hw_cpu_limit" not in st.session_state:
         st.session_state["hw_cpu_limit"] = 0
+    st.session_state["hw_gpu_limit"] = min(max(float(st.session_state["hw_gpu_limit"]), 0.0), max_gpu)
+    st.session_state["hw_cpu_limit"] = min(max(int(st.session_state["hw_cpu_limit"]), 0), max_cores)
 
     ui_section("约束参数", "手动微调 GPU 显存上限和 CPU 核心数。")
     col1, col2 = st.columns(2)
@@ -178,9 +179,11 @@ def render_benchmark_ui(
 
     # ── 运行 Benchmark ──
     cur_bench_sig = f"{model_path}:{imgsz}:{batch}:{fp16}:{gpu_limit}:{cpu_limit}"
-    if st.session_state.get("engine/benchmark_sig") != cur_bench_sig:
-        st.session_state["hw_has_bench_result"] = False
-        st.session_state["engine/benchmark_sig"] = cur_bench_sig
+    reset_state_on_change(
+        "engine/benchmark_sig",
+        cur_bench_sig,
+        ["hw_has_bench_result", "engine/benchmark_result", "hw_bench_export_ts"],
+    )
 
     if st.button("🚀 运行模拟 Benchmark", type="primary", use_container_width=True, key="hw_run_bench"):
         with st.spinner("正在受限环境中运行模型..."):
@@ -196,6 +199,7 @@ def render_benchmark_ui(
             )
             st.session_state["engine/benchmark_result"] = result
             st.session_state["hw_has_bench_result"] = True
+            clear_export_timestamp("hw_bench_export_ts")
 
     # ── 展示结果 ──
     if st.session_state.get("hw_has_bench_result"):
@@ -236,7 +240,8 @@ def render_benchmark_ui(
 
         # Benchmark 单独下载
         import pandas as _pd
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = export_timestamp("hw_bench_export_ts")
+        report_time = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
         bench_df = _pd.DataFrame([{
             "峰值显存(MB)": r["peak_memory_mb"],
             "FPS": r["fps"],
@@ -256,7 +261,7 @@ def render_benchmark_ui(
         col_dl1, col_dl2 = st.columns(2)
 
         export_data = {
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "date": report_time,
             "model_path": model_path,
             "imgsz": imgsz,
             "batch": batch,
@@ -264,14 +269,12 @@ def render_benchmark_ui(
             "constraints": {"gpu_memory_limit_gb": gpu_limit, "cpu_cores": cpu_limit},
             **{k: v for k, v in r.items() if k != "estimated"},
         }
-        json_buf = io.BytesIO()
-        json_buf.write(json.dumps(export_data, indent=2, ensure_ascii=False).encode("utf-8"))
-        json_buf.seek(0)
+        download = json_download(export_data, f"benchmark_{ts}.json")
         col_dl1.download_button(
             label="📥 下载报告 JSON",
-            data=json_buf,
-            file_name=f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
+            data=download.data,
+            file_name=download.file_name,
+            mime=download.mime,
             use_container_width=True,
         )
 
@@ -280,7 +283,7 @@ def render_benchmark_ui(
             col_dl2.download_button(
                 label="📊 导出图表 PNG",
                 data=png_data,
-                file_name=f"benchmark_charts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                file_name=f"benchmark_charts_{ts}.png",
                 mime="image/png",
                 use_container_width=True,
             )

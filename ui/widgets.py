@@ -1,20 +1,18 @@
 """数据集/模型/配置选择器（含拖拽上传 + 自动扫描 + 手动输入）"""
 
-import os
 import hashlib
 import zipfile
-import shutil
 from pathlib import Path
 
 import streamlit as st
 import yaml
 
-from ui import UPLOAD_DIR
 from ui.components import ui_path_chip
 from ui.scanner import (
     scan_datasets, scan_models, scan_model_configs,
     parse_data_yaml, save_uploaded_file, load_model_cached,
 )
+from ui.runtime import safe_extract_zip
 
 
 def _check_and_set_fingerprint(key: str, data: bytes) -> bool:
@@ -28,21 +26,15 @@ def _check_and_set_fingerprint(key: str, data: bytes) -> bool:
 
 def _extract_dataset_zip(uploaded_zip) -> str | None:
     """解压数据集 zip，找到 data.yaml 并修复相对路径，返回 yaml 路径"""
-    safe_name = Path(uploaded_zip.name).stem or "dataset"
-    extract_dir = UPLOAD_DIR / "datasets_extracted" / safe_name
-    if extract_dir.exists():
-        shutil.rmtree(extract_dir)
-    extract_dir.mkdir(parents=True)
-    # 防 zip slip 路径穿越
-    safe_root = extract_dir.resolve()
-    with zipfile.ZipFile(uploaded_zip) as zf:
-        for member in zf.namelist():
-            member_path = (extract_dir / member).resolve()
-            if not str(member_path).startswith(str(safe_root) + os.sep):
-                st.error(f"压缩包包含非法路径: {member}")
-                shutil.rmtree(extract_dir)
-                return None
-        zf.extractall(extract_dir)
+    try:
+        extract_dir = safe_extract_zip(uploaded_zip, "datasets_extracted")
+    except zipfile.BadZipFile:
+        st.error("压缩包格式错误，请重新打包为标准 ZIP 文件。")
+        return None
+    except ValueError as e:
+        st.error(str(e))
+        return None
+
     yaml_candidates = sorted(extract_dir.rglob("data*.yaml"))
     if not yaml_candidates:
         st.error("压缩包中未找到 data.yaml，请确保 zip 内包含完整的数据集目录结构。")

@@ -1,18 +1,16 @@
 """页面: 硬件预估 + 受限环境模拟"""
 
 import os
-import io
-import json
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
-from ui import SCRIPT_DIR
 from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import model_selector, model_config_selector
-from ui.image_utils import estimate_memory, HARDWARE_PROFILES, get_model_info
+from ui.image_utils import estimate_memory, HARDWARE_PROFILES
 from ui.pages.hardware_benchmark import render_benchmark_ui
+from ui.runtime import clear_export_timestamp, export_timestamp, json_download, reset_state_on_change
 
 def page_hardware():
     ui_page_header(
@@ -59,9 +57,21 @@ def page_hardware():
         cur_sig = f"{target}:{os.path.getmtime(target)}:{imgsz}:{batch}:{fp16_mode}"
     except OSError:
         cur_sig = ""
-    if st.session_state.get("hw_sig") != cur_sig:
-        st.session_state["hw_has_result"] = False
-        st.session_state["hw_sig"] = cur_sig
+    reset_state_on_change(
+        "hw_sig",
+        cur_sig,
+        [
+            "hw_has_result",
+            "hw_params_m",
+            "hw_flops_g",
+            "hw_memory",
+            "hw_saved_imgsz",
+            "hw_saved_batch",
+            "hw_saved_fp16",
+            "hw_target",
+            "hw_export_ts",
+        ],
+    )
 
     if st.button("开始预估", type="primary", use_container_width=True):
         with st.spinner("正在分析模型..."):
@@ -93,10 +103,12 @@ def page_hardware():
                 st.session_state["hw_target"] = target
                 st.session_state["hw_has_result"] = True
                 st.session_state["hw_sig"] = cur_sig
+                clear_export_timestamp("hw_export_ts")
 
             except Exception as e:
                 st.error(f"模型分析失败: {e}")
                 st.session_state["hw_has_result"] = False
+                clear_export_timestamp("hw_export_ts")
             finally:
                 try:
                     del model
@@ -151,16 +163,15 @@ def page_hardware():
         df = pd.DataFrame(rows)
         st.dataframe(df, use_container_width=True, hide_index=True)
         csv_hw = df.to_csv(index=False).encode("utf-8")
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = export_timestamp("hw_export_ts")
+        report_time = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
         st.download_button("下载兼容性表格 (CSV)", csv_hw, f"hardware_compat_{ts}.csv",
                            "text/csv", key="dl_hw_csv", use_container_width=True)
 
         # 导出硬件预估报告
         ui_section("导出报告", "将预估结果导出为 JSON 文件。", "EXPORT")
-        import json as _json
-        import io as _io
         report = {
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "date": report_time,
             "target": target,
             "params_m": round(params_m, 2),
             "flops_g": round(flops_g, 2),
@@ -170,12 +181,9 @@ def page_hardware():
             "memory": memory,
             "compatibility": rows,
         }
-        buf = _io.BytesIO()
-        buf.write(_json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8"))
-        buf.seek(0)
+        download = json_download(report, f"hardware_est_{ts}.json")
         st.download_button(
-            label="下载硬件预估报告 (JSON)", data=buf,
-            file_name=f"hardware_est_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
+            label="下载硬件预估报告 (JSON)", data=download.data,
+            file_name=download.file_name,
+            mime=download.mime,
         )
-

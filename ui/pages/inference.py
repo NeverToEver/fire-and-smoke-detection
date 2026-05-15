@@ -2,7 +2,7 @@
 
 import os
 import io as _io
-import json as _json
+import hashlib
 import zipfile as _zipfile
 from pathlib import Path
 from datetime import datetime
@@ -13,6 +13,29 @@ from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import model_selector
 from ui.scanner import load_model_cached, scan_datasets, parse_data_yaml
 from ui.image_utils import get_image_files
+from ui.runtime import (
+    clear_export_timestamp,
+    export_timestamp,
+    file_fingerprint,
+    json_download,
+    reset_state_on_change,
+    safe_extract_zip,
+)
+
+
+def _image_list_signature(image_paths: list[str]) -> str:
+    hasher = hashlib.sha256()
+    for image_path in image_paths:
+        p = Path(image_path)
+        hasher.update(str(p).encode("utf-8", errors="ignore"))
+        try:
+            stat = p.stat()
+        except OSError:
+            hasher.update(b":missing")
+            continue
+        hasher.update(f":{stat.st_mtime_ns}:{stat.st_size}".encode("ascii"))
+    return hasher.hexdigest()[:16]
+
 
 def page_inference():
     ui_page_header(
@@ -48,12 +71,20 @@ def page_inference():
 
     # 输入变化检测：模型路径 + 模式 + 阈值改变时清除旧结果
     inf_sig = f"{model_path}:{mode}:{conf_threshold}"
-    if st.session_state.get("inf_sig") != inf_sig:
-        st.session_state.pop("inf_has_results", None)
-        st.session_state.pop("inf_results", None)
-        st.session_state.pop("inf_batch_has", None)
-        st.session_state.pop("inf_batch", None)
-        st.session_state["inf_sig"] = inf_sig
+    reset_state_on_change(
+        "inf_sig",
+        inf_sig,
+        [
+            "inf_has_results",
+            "inf_results",
+            "inf_batch_has",
+            "inf_batch",
+            "_inf_batch_running",
+            "_inf_batch_cancel",
+            "inf_single_export_ts",
+            "inf_batch_export_ts",
+        ],
+    )
 
     if mode == "单张/多张上传":
         uploaded_files = st.file_uploader(
@@ -64,11 +95,21 @@ def page_inference():
             st.info("请上传图片进行推理")
             return
 
+        upload_sig = "|".join(f"{uf.name}:{file_fingerprint(uf)}" for uf in uploaded_files)
+        reset_state_on_change(
+            "inf_upload_sig",
+            upload_sig,
+            ["inf_has_results", "inf_results", "inf_single_export_ts"],
+        )
+
         if st.button("运行推理", type="primary", use_container_width=True):
             results_list = []
             for uploaded in uploaded_files:
-                file_bytes = np.frombuffer(uploaded.read(), np.uint8)
+                file_bytes = np.frombuffer(uploaded.getbuffer(), np.uint8)
                 img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                if img is None:
+                    st.warning(f"无法读取图片: {uploaded.name}")
+                    continue
                 inf_result = model.predict(img, conf=conf_threshold, verbose=False)
                 result_img = inf_result[0].plot()
                 result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
@@ -82,10 +123,10 @@ def page_inference():
                     caption = f"火焰 {fire_count} 处 | 烟雾 {smoke_count} 处 | 均置信度 {confs.mean():.2f}"
                 else:
                     caption = "未检测到目标"
-                results_list.append({"img": result_img, "caption": caption})
-                uploaded.seek(0)
+                results_list.append({"name": uploaded.name, "img": result_img, "caption": caption})
             st.session_state["inf_results"] = results_list
-            st.session_state["inf_has_results"] = True
+            st.session_state["inf_has_results"] = bool(results_list)
+            clear_export_timestamp("inf_single_export_ts")
 
         if st.session_state.get("inf_has_results"):
             ui_section("检测结果", "上传图片的检测框和目标数量。", "RESULT")
@@ -100,18 +141,24 @@ def page_inference():
             with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as zf:
                 for i, r in enumerate(results_list):
                     img_bytes = cv2.imencode(".jpg", cv2.cvtColor(r["img"], cv2.COLOR_RGB2BGR))[1].tobytes()
-                    zf.writestr(f"result_{i+1:03d}.jpg", img_bytes)
+                    stem = Path(r.get("name", f"result_{i+1:03d}")).stem or f"result_{i+1:03d}"
+                    zf.writestr(f"{i+1:03d}_{stem}.jpg", img_bytes)
             buf.seek(0)
+            ts = export_timestamp("inf_single_export_ts")
             st.download_button(
                 label="下载检测结果 (ZIP)", data=buf,
-                file_name=f"inference_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                file_name=f"inference_{ts}.zip",
                 mime="application/zip",
             )
 
     else:
         # 测试集目录模式 — 分块处理以支持中途取消
-        ui_section("测试集目录", "从数据集配置自动取 test/val，或手动指定图片目录。", "DATA")
+        ui_section("测试集目录", "从数据集配置自动取 test/val，上传 ZIP，或手动指定图片目录。", "DATA")
 
+        test_dir = ""
+        zip_dir = ""
+
+        # 方式1: 从已注册数据集选择
         datasets = scan_datasets()
         dataset_options = [d["label"] for d in datasets]
         selected_ds = st.selectbox(
@@ -119,8 +166,6 @@ def page_inference():
             ["-- 选择数据集 --"] + dataset_options,
             key="inf_ds",
         )
-
-        test_dir = ""
         if selected_ds != "-- 选择数据集 --":
             for d in datasets:
                 if d["label"] == selected_ds:
@@ -130,12 +175,32 @@ def page_inference():
                         ui_path_chip(d["path"], "数据集配置")
                     break
 
+        # 方式2: 拖拽上传 ZIP 测试集
+        uploaded_zip = st.file_uploader(
+            "或上传测试图片 ZIP 包", type=["zip"],
+            accept_multiple_files=False, key="inf_zip_upload",
+        )
+        if uploaded_zip is not None:
+            try:
+                extract_dir = safe_extract_zip(uploaded_zip, "datasets_extracted", prefix="inf_")
+            except _zipfile.BadZipFile:
+                st.error("ZIP 包格式错误，请重新打包后上传。")
+                return
+            except ValueError as e:
+                st.error(str(e))
+                return
+            zip_dir = str(extract_dir)
+            ui_path_chip(zip_dir, "ZIP 已解压")
+
+        # 方式3: 手动输入路径（优先级最高）
         manual_dir = st.text_input("或手动输入测试图片目录", placeholder="/path/to/test/images", key="inf_dir_manual")
         if manual_dir:
             test_dir = manual_dir
+        elif zip_dir:
+            test_dir = zip_dir
 
         if not test_dir or not Path(test_dir).exists():
-            st.info("请选择数据集或输入测试图片目录路径")
+            st.info("请选择数据集、上传 ZIP 包或手动输入测试图片目录路径")
             return
 
         test_images = get_image_files(test_dir, limit=1000)
@@ -146,6 +211,23 @@ def page_inference():
         st.caption(f"共发现 {len(test_images)} 张测试图片")
 
         max_display = st.slider("最多显示结果图", 4, 24, 8, 4, key="inf_max_display")
+        batch_input_sig = f"{inf_sig}:{test_dir}:{_image_list_signature(test_images)}:{max_display}"
+        reset_state_on_change(
+            "inf_batch_input_sig",
+            batch_input_sig,
+            [
+                "inf_batch_has",
+                "inf_batch",
+                "_inf_batch_running",
+                "_inf_batch_cancel",
+                "_inf_batch_idx",
+                "_inf_batch_fire",
+                "_inf_batch_smoke",
+                "_inf_batch_confs",
+                "_inf_batch_display",
+                "inf_batch_export_ts",
+            ],
+        )
 
         # 分块推理状态
         CHUNK_SIZE = 20
@@ -239,6 +321,7 @@ def page_inference():
             st.session_state["_inf_batch_smoke"] = 0
             st.session_state["_inf_batch_confs"] = []
             st.session_state["_inf_batch_display"] = []
+            clear_export_timestamp("inf_batch_export_ts")
             st.rerun()
 
         if st.session_state.get("inf_batch_has"):
@@ -261,8 +344,10 @@ def page_inference():
 
             # 导出汇总 JSON
             ui_section("导出结果", "下载推理汇总数据和结果图片。", "EXPORT")
+            ts = export_timestamp("inf_batch_export_ts")
+            report_time = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
             summary = {
-                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "date": report_time,
                 "model": model_path,
                 "test_dir": test_dir,
                 "total_images": batch["total_images"],
@@ -270,13 +355,9 @@ def page_inference():
                 "total_smoke": batch["total_smoke"],
                 "avg_confidence": round(float(batch["avg_conf"]), 4),
             }
-            json_buf = _io.BytesIO()
-            json_buf.write(_json.dumps(summary, indent=2, ensure_ascii=False).encode("utf-8"))
-            json_buf.seek(0)
+            download = json_download(summary, f"inference_summary_{ts}.json")
             st.download_button(
-                label="下载推理汇总 (JSON)", data=json_buf,
-                file_name=f"inference_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json",
+                label="下载推理汇总 (JSON)", data=download.data,
+                file_name=download.file_name,
+                mime=download.mime,
             )
-
-
