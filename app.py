@@ -26,12 +26,10 @@ from ui.pages.evaluation import page_evaluation
 from ui.pages.hardware import page_hardware
 from ui.pages.optimization import page_optimization
 
-# 注册自定义模块到 ultralytics（标准 + Slim-Neck 双架构兼容）
-import models.yolo_mobilenet  # noqa: F401
-try:
-    import models.yolo_mobilenet_slimneck  # noqa: F401
-except ImportError:
-    pass
+from models.registry import register_custom_modules
+
+# 注册项目内受信任的自定义模块到 Ultralytics
+register_custom_modules()
 
 # 注入 CSS
 st.markdown(CSS_STYLE, unsafe_allow_html=True)
@@ -46,7 +44,7 @@ def _safe_mtime(f: os.PathLike) -> float | None:
 
 
 def _cleanup_old_files():
-    """清理过期文件，防止无限累积。每个区块独立容错。"""
+    """清理过期临时文件，避免自动删除训练结果和导出产物。"""
 
     # eval_results: 保留最近 10 个
     d = SCRIPT_DIR / "eval_results"
@@ -74,8 +72,8 @@ def _cleanup_old_files():
             except OSError:
                 pass
 
-    # 上传目录: 递归清理 7 天前的所有文件
-    for subdir in ["models", "datasets", "model_configs", "datasets_extracted"]:
+    # 上传目录: 只自动清理解压缓存，用户上传的模型/YAML 保留
+    for subdir in ["datasets_extracted"]:
         d = UPLOAD_DIR / subdir
         if d.exists():
             cutoff = _time.time() - 7 * 86400
@@ -93,39 +91,6 @@ def _cleanup_old_files():
                         pass
             except Exception:
                 pass
-
-    # runs/detect: 保留最近 5 次训练结果
-    runs_dir = SCRIPT_DIR / "runs" / "detect"
-    if runs_dir.exists():
-        try:
-            subdirs = sorted(runs_dir.iterdir(), key=lambda f: _safe_mtime(f) or 0, reverse=True)
-            for sd in subdirs[5:]:
-                if sd.is_dir():
-                    try:
-                        _shutil.rmtree(sd)
-                    except OSError:
-                        pass
-        except Exception:
-            pass
-
-    # runs/optimize: 清理 7 天前的导出文件
-    opt_dir = SCRIPT_DIR / "runs" / "optimize"
-    if opt_dir.exists():
-        cutoff = _time.time() - 7 * 86400
-        try:
-            for f in opt_dir.iterdir():
-                mtime = _safe_mtime(f)
-                if mtime is None or mtime >= cutoff:
-                    continue
-                try:
-                    if f.is_dir():
-                        _shutil.rmtree(f)
-                    else:
-                        f.unlink()
-                except OSError:
-                    pass
-        except Exception:
-            pass
 
     # 清理滞留的临时训练 args JSON 文件
     for tf in SCRIPT_DIR.glob("_train_tmp_*.json"):

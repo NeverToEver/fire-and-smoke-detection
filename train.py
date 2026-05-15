@@ -18,11 +18,9 @@ def train(
 ):
     import torch
     from ultralytics import YOLO
-    import models.yolo_mobilenet  # noqa: F401 — 注册自定义模块
-    try:
-        import models.yolo_mobilenet_slimneck  # noqa: F401
-    except ImportError:
-        pass
+    from models.registry import register_custom_modules
+
+    register_custom_modules()
     if model_yaml is None:
         model_yaml = str(SCRIPT_DIR / "configs/yolo11-mobilenetv3-p2.yaml")
 

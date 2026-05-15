@@ -3,10 +3,7 @@
 import os
 import sys
 import time
-import shutil
-import hashlib
 import tempfile
-import importlib.util
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -16,6 +13,7 @@ from ui.components import ui_page_header, ui_section, ui_path_chip
 from ui.widgets import dataset_selector, model_config_selector
 from ui.scanner import scan_models, get_compute_devices
 from engine.training_monitor import parse_training_log
+from models.registry import architecture_for_config, get_architectures
 
 
 @st.fragment(run_every=3)
@@ -202,53 +200,20 @@ def page_training():
 
     ui_path_chip(model_yaml, "模型配置")
 
-    # ── 模型架构文件（高级）──
-    MODEL_PY = SCRIPT_DIR / "models" / "yolo_mobilenet.py"
-    with st.expander("模型架构文件（高级）", expanded=False):
-        st.caption(f"当前架构: `{MODEL_PY}`")
-        arch_upload = st.file_uploader(
-            "拖拽上传替换模型架构 .py 文件",
-            type=["py"],
-            key="tr_arch_upload",
-            help="上传自定义 backbone/neck/head 定义文件。原文件将备份为 .bak。",
-        )
-        if arch_upload is not None:
-            fp_key = "tr_arch_processed"
-            new_fp = hashlib.sha256(arch_upload.getbuffer()).hexdigest()
-            if st.session_state.get(fp_key) != new_fp:
-                tmp_path = None
-                try:
-                    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, dir=str(SCRIPT_DIR), prefix="_arch_test_") as tf:
-                        tf.write(arch_upload.getvalue().decode("utf-8"))
-                        tmp_path = tf.name
-                    spec = importlib.util.spec_from_file_location("_arch_test", tmp_path)
-                    mod = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(mod)
-                    required = ["MobileNetV3_Backbone", "YOLOv11_MobileNetV3_Head", "DetectWrapper"]
-                    missing = [n for n in required if not hasattr(mod, n)]
-                    if missing:
-                        st.error(f"缺少必要类: {', '.join(missing)}。文件必须导出: {', '.join(required)}。")
-                    else:
-                        bak = Path(str(MODEL_PY) + ".bak")
-                        if not bak.exists():
-                            shutil.copy2(MODEL_PY, bak)
-                        shutil.copy2(tmp_path, MODEL_PY)
-                        st.session_state[fp_key] = new_fp
-                        st.success("模型架构已替换，原文件备份为 .bak。请手动刷新页面以重新加载模块。")
-                        if st.button("刷新页面", key="tr_reload_arch"):
-                            st.rerun()
-                except SyntaxError as e:
-                    st.error(f"Python 语法错误: {e}")
-                except Exception as e:
-                    st.error(f"导入验证失败: {e}")
-                finally:
-                    if tmp_path:
-                        try:
-                            Path(tmp_path).unlink()
-                        except OSError:
-                            pass
-            else:
-                st.info("此文件已处理过。")
+    # ── 项目内受信任架构库 ──
+    matched_arch = architecture_for_config(model_yaml)
+    with st.expander("已注册模型架构", expanded=False):
+        if matched_arch:
+            st.success(f"当前配置匹配: {matched_arch.label}")
+            st.caption(matched_arch.description)
+        else:
+            st.info("当前 YAML 不是内置默认配置。只要其中的模块名已在项目架构库注册，训练仍可正常解析。")
+
+        for arch in get_architectures():
+            cfg_path = SCRIPT_DIR / arch.default_config
+            status = "当前使用" if matched_arch and matched_arch.id == arch.id else "可选"
+            st.markdown(f"**{arch.label}** · {status}")
+            st.caption(f"{arch.description} 配置: `{cfg_path}`")
 
     ui_section("超参数", "调整滑块快速配置训练策略，也可手动微调每个参数。", "PARAMS")
 
@@ -385,9 +350,8 @@ def page_training():
             "import json, sys, pathlib; "
             "args = json.load(open(sys.argv[1])); "
             "sys.path.insert(0, args['script_dir']); "
-            "import models.yolo_mobilenet\n"
-            "try:\n    import models.yolo_mobilenet_slimneck\n"
-            "except ImportError:\n    pass\n"
+            "from models.registry import register_custom_modules; "
+            "register_custom_modules(); "
             "from ultralytics import YOLO; "
             "m = YOLO(args['model_yaml']); "
             "m.train(data=args['data_yaml'], epochs=args['epochs'], imgsz=args['imgsz'], "
@@ -436,5 +400,4 @@ def page_training():
                         st.download_button("下载训练曲线 (PNG)", f.read(),
                                            f"results_{ts_recent}.png", "image/png",
                                            key="dl_recent_results", use_container_width=True)
-
 

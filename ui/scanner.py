@@ -9,6 +9,7 @@ import streamlit as st
 import yaml
 
 from ui import SCRIPT_DIR, UPLOAD_DIR
+from ui.runtime import stable_upload_stem
 from engine.logging import get_logger
 
 _log = get_logger(__name__)
@@ -143,11 +144,15 @@ def parse_data_yaml(yaml_path: str) -> dict | None:
 
 
 def save_uploaded_file(uploaded_file, subdir: str) -> str:
-    """保存拖拽上传文件（原子写入），并返回可供现有逻辑使用的本地路径。"""
-    safe_name = Path(uploaded_file.name).name
+    """保存拖拽上传文件（原子写入），按内容指纹命名以避免同名覆盖。"""
+    suffix = Path(uploaded_file.name).suffix.lower()
+    safe_name = f"{stable_upload_stem(uploaded_file)}{suffix}"
     target_dir = UPLOAD_DIR / subdir
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / safe_name
+    if target_path.exists():
+        return str(target_path.resolve())
+
     tmp_fd, tmp_path = tempfile.mkstemp(dir=str(target_dir), prefix=f".tmp_{safe_name}_")
     try:
         with os.fdopen(tmp_fd, "wb") as f:

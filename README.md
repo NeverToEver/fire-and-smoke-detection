@@ -24,7 +24,7 @@
 - matplotlib
 - YAML
 
-模型结构配置位于 [configs/yolo11-mobilenetv3-slimneck-p2.yaml](configs/yolo11-mobilenetv3-slimneck-p2.yaml)，自定义模块注册逻辑位于 [models/yolo_mobilenet.py](models/yolo_mobilenet.py)。
+模型结构配置位于 [configs/yolo11-mobilenetv3-slimneck-p2.yaml](configs/yolo11-mobilenetv3-slimneck-p2.yaml)，自定义架构注册逻辑位于 [models/registry.py](models/registry.py)。
 
 ## 环境准备
 
@@ -55,13 +55,19 @@ thop
 ## 启动界面
 
 ```bash
-streamlit run app.py
+.venv/bin/python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
 ```
 
-启动后访问终端输出的本地地址，通常是：
+启动后访问：
 
 ```text
 http://127.0.0.1:8501
+```
+
+如果未使用虚拟环境，也可以直接：
+
+```bash
+streamlit run app.py
 ```
 
 ## 数据集格式
@@ -91,12 +97,17 @@ configs/yolo11-mobilenetv3-slimneck-p2.yaml
 该配置定义：
 
 - `MobileNetV3_Backbone`
-- `YOLOv11_MobileNetV3_Head`
+- `YOLOv11_MobileNetV3_SlimNeck_Head`
 - `DetectWrapper`
 - P2/P3/P4/P5 多尺度检测特征
 - `nc: 2` 火焰/烟雾二分类
 
-训练时界面会自动扫描项目根目录下包含 `backbone` 或 `head` 字段的 `.yaml` 文件，也支持拖拽上传模型结构 YAML。
+训练时界面会自动扫描项目根目录下包含 `backbone` 或 `head` 字段的 `.yaml` 文件，也支持拖拽上传模型结构 YAML。自定义 Python 骨架文件不再通过浏览器上传覆盖源码；如需增加新骨架，请将实现文件加入 `models/`，将对应 YAML 加入 `configs/`，并在 `models/registry.py` 注册。
+
+当前内置架构：
+
+- `configs/yolo11-mobilenetv3-p2.yaml`：标准 MobileNetV3 + YOLOv11 Head。
+- `configs/yolo11-mobilenetv3-slimneck-p2.yaml`：MobileNetV3 + GSConv/VoVGSCSP Slim-Neck。
 
 ## 训练
 
@@ -171,6 +182,7 @@ python train.py --data /path/to/data.yaml --model configs/yolo11-mobilenetv3-sli
 
 - 侧边栏提供“跟随系统 / 白天模式 / 夜间模式”主题切换。
 - 数据集 YAML、模型配置 YAML、模型权重和推理图片均支持拖拽上传。
+- 上传的 YAML 和权重文件会按内容指纹保存到 `.streamlit_uploads/`，同名不同内容不会互相覆盖。
 - Streamlit 默认顶部工具栏已在样式中隐藏，界面更接近独立应用。
 
 ## 常见问题
@@ -202,6 +214,8 @@ python -m streamlit run app.py
 ├── configs/yolo11-mobilenetv3-slimneck-p2.yaml
 ├── models/
 │   ├── __init__.py
-│   └── yolo_mobilenet.py
+│   ├── registry.py
+│   ├── yolo_mobilenet.py
+│   └── yolo_mobilenet_slimneck.py
 └── README.md
 ```
