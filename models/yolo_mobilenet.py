@@ -1,68 +1,56 @@
 import torch
 import torch.nn as nn
-from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
 from ultralytics.nn.modules.conv import Conv
 from ultralytics.nn.modules.block import C3k2
 import ultralytics.nn.tasks as tasks
 from ultralytics.nn.tasks import DetectionModel
 from ultralytics.nn.modules.head import Detect as UltralyticsDetect
 
-
-# ----------------- MobileNetV3 Backbone -----------------
-
-class MobileNetV3_Backbone(nn.Module):
-    def __init__(self, pretrained=True):
-        super().__init__()
-        weights = MobileNet_V3_Large_Weights.DEFAULT if pretrained else None
-        base = mobilenet_v3_large(weights=weights)
-        features = base.features
-        self.stage_idxs = [2, 4, 7, 13]
-        self.stages = nn.ModuleList([features[i] for i in range(max(self.stage_idxs) + 1)])
-        self.channels = [24, 40, 80, 160]
-
-    def forward(self, x):
-        outs = []
-        for i, layer in enumerate(self.stages):
-            x = layer(x)
-            if i in self.stage_idxs:
-                outs.append(x)
-        return outs
+from .backbone import MobileNetV3_Backbone  # noqa: F401 — 重导出供 YAML 引用
 
 
 # ----------------- YOLOv11 Head (标准 Conv + C3k2) -----------------
 
 class YOLOv11_MobileNetV3_Head(nn.Module):
+    """YOLOv11 标准颈部网络，使用 Conv + C3k2 进行特征融合。
+
+    结构：FPN（自顶向下）+ PAN（自底向上）双向特征融合，
+    输入 P2/P3/P4/P5 四层特征，输出融合后的四层特征。
+    """
+
     def __init__(self, ch=None):
         super().__init__()
         if ch is None:
             ch = [24, 40, 80, 160]
         p2, p3, p4, p5 = ch
 
-        # Top-down FPN
+        # Top-down FPN: 自顶向下融合高层语义信息
         self.up_p5 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.c3_p4 = C3k2(p5 + p4, 256, n=1)
+        self.c3_p4 = C3k2(p5 + p4, 256, n=1)  # P5 上采样 + P4
 
         self.up_p4 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.c3_p3 = C3k2(256 + p3, 128, n=1)
+        self.c3_p3 = C3k2(256 + p3, 128, n=1)  # P4 上采样 + P3
 
         self.up_p3 = nn.Upsample(scale_factor=2, mode='nearest')
-        self.c3_p2 = C3k2(128 + p2, 64, n=1)
+        self.c3_p2 = C3k2(128 + p2, 64, n=1)  # P3 上采样 + P2
 
-        # Bottom-up PAN
-        self.down_p2 = Conv(64, 64, k=3, s=2)
-        self.c3_p3_out = C3k2(64 + 128, 128, n=1)
+        # Bottom-up PAN: 自底向上融合底层位置信息
+        self.down_p2 = Conv(64, 64, k=3, s=2)  # P2 下采样
+        self.c3_p3_out = C3k2(64 + 128, 128, n=1)  # 融合 P3
 
-        self.down_p3 = Conv(128, 128, k=3, s=2)
-        self.c3_p4_out = C3k2(128 + 256, 256, n=1)
+        self.down_p3 = Conv(128, 128, k=3, s=2)  # P3 下采样
+        self.c3_p4_out = C3k2(128 + 256, 256, n=1)  # 融合 P4
 
-        self.down_p4 = Conv(256, 256, k=3, s=2)
-        self.c3_p5_out = C3k2(256 + p5, 256, n=1)
+        self.down_p4 = Conv(256, 256, k=3, s=2)  # P4 下采样
+        self.c3_p5_out = C3k2(256 + p5, 256, n=1)  # 融合 P5
 
         self.channels = [64, 128, 256, 256]
 
     def forward(self, x):
+        """前向传播：FPN 自顶向下 → PAN 自底向上。"""
         p2, p3, p4, p5 = x
 
+        # FPN: 自顶向下
         p5_up = self.up_p5(p5)
         p4_f = self.c3_p4(torch.cat([p5_up, p4], dim=1))
 
@@ -72,6 +60,7 @@ class YOLOv11_MobileNetV3_Head(nn.Module):
         p3_up = self.up_p3(p3_f)
         p2_f = self.c3_p2(torch.cat([p3_up, p2], dim=1))
 
+        # PAN: 自底向上
         p2_d = self.down_p2(p2_f)
         p3_out = self.c3_p3_out(torch.cat([p2_d, p3_f], dim=1))
 
@@ -87,6 +76,8 @@ class YOLOv11_MobileNetV3_Head(nn.Module):
 # ----------------- Detect Wrapper -----------------
 
 class Select(nn.Module):
+    """从特征图列表中选择指定索引的特征层。"""
+
     def __init__(self, idx=0, ch=None):
         super().__init__()
         self.idx = int(idx)
@@ -97,6 +88,8 @@ class Select(nn.Module):
 
 
 class DetectWrapper(UltralyticsDetect):
+    """Ultralytics Detect 头的包装器，适配自定义骨干网络输出。"""
+
     def __init__(self, nc=80, *ch):
         ch_list = list(map(int, ch))
         super().__init__(nc=int(nc), ch=ch_list)
